@@ -1,0 +1,52 @@
+# ============================================================
+#  Anggie Smart Light - root gitignore
+#  Keep source only. Build artifacts, caches, and large
+#  binaries stay out of version control.
+# ============================================================
+
+# Archives / packaged builds
+*.zip
+*.apk
+*.aab
+*.aar
+
+# Flutter / Dart
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/generated_plugin_registrant.*
+**/.pub-cache/
+**/.pub/
+
+# Android / Gradle
+**/.gradle/
+**/captures/
+**/android/local.properties
+**/android/.cxx/
+**/key.properties
+**/*.keystore
+**/*.jks
+
+# Node (backend scaffold)
+**/node_modules/
+**/dist/
+**/npm-debug.log*
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Secrets / env
+.env
+*.env
+!*.example.env
+
+# Logs / temp
+*.log
+flutterrun.log
+*_temp/

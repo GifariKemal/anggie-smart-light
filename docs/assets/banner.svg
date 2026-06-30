@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" width="1200" height="280" role="img" aria-label="Anggie Smart Light">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1322"/>
+      <stop offset="0.55" stop-color="#0F1A2E"/>
+      <stop offset="1" stop-color="#0C1424"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22C55E" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#22C55E" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="280" fill="url(#bg)"/>
+
+  <!-- blueprint grid -->
+  <g stroke="#64748B" stroke-opacity="0.08">
+    <path d="M0 40H1200M0 80H1200M0 120H1200M0 160H1200M0 200H1200M0 240H1200"/>
+    <path d="M40 0V280M120 0V280M200 0V280M280 0V280M360 0V280M440 0V280M520 0V280M600 0V280M680 0V280M760 0V280M840 0V280M920 0V280M1000 0V280M1080 0V280M1160 0V280"/>
+  </g>
+
+  <!-- pulsing glow behind the bulb -->
+  <circle cx="150" cy="140" r="120" fill="url(#glow)">
+    <animate attributeName="r" values="95;130;95" dur="3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;1;0.6" dur="3s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- bulb tile -->
+  <g transform="translate(110,100)">
+    <rect width="80" height="80" rx="20" fill="#1E293B" stroke="#2B3A52"/>
+    <circle cx="40" cy="34" r="20" fill="#22C55E"/>
+    <rect x="32" y="50" width="16" height="14" rx="3" fill="#22C55E"/>
+    <rect x="35" y="64" width="10" height="6" rx="2" fill="#22C55E"/>
+  </g>
+
+  <!-- title -->
+  <text x="240" y="120" font-family="Verdana,Segoe UI,sans-serif" font-size="46" font-weight="800" fill="#F8FAFC" letter-spacing="1">ANGGIE SMART LIGHT</text>
+  <text x="242" y="160" font-family="Consolas,monospace" font-size="18" fill="#94A3B8" letter-spacing="3">ESP32 PID LIGHTING  +  FLUTTER CONTROL ROOM</text>
+
+  <!-- status chips -->
+  <g font-family="Consolas,monospace" font-size="13" font-weight="700">
+    <g transform="translate(242,185)">
+      <rect width="118" height="30" rx="15" fill="#22C55E" fill-opacity="0.12" stroke="#22C55E" stroke-opacity="0.4"/>
+      <circle cx="18" cy="15" r="4" fill="#22C55E">
+        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.4s" repeatCount="indefinite"/>
+      </circle>
+      <text x="32" y="20" fill="#22C55E">FIRMWARE</text>
+    </g>
+    <g transform="translate(372,185)">
+      <rect width="92" height="30" rx="15" fill="#38BDF8" fill-opacity="0.12" stroke="#38BDF8" stroke-opacity="0.4"/>
+      <circle cx="18" cy="15" r="4" fill="#38BDF8"/>
+      <text x="32" y="20" fill="#38BDF8">APP</text>
+    </g>
+    <g transform="translate(476,185)">
+      <rect width="150" height="30" rx="15" fill="#F59E0B" fill-opacity="0.12" stroke="#F59E0B" stroke-opacity="0.4"/>
+      <circle cx="18" cy="15" r="4" fill="#F59E0B"/>
+      <text x="32" y="20" fill="#F59E0B">WIFI TELEMETRY</text>
+    </g>
+  </g>
+
+  <!-- animated scan line -->
+  <rect x="0" y="0" width="3" height="280" fill="url(#accent)" opacity="0.5">
+    <animate attributeName="x" values="240;1180;240" dur="6s" repeatCount="indefinite"/>
+  </rect>
+</svg>

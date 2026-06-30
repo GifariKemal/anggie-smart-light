@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Data flow from hardware to app">
+  <defs>
+    <linearGradient id="bgf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B1322"/>
+      <stop offset="1" stop-color="#0C1424"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="360" fill="url(#bgf)"/>
+  <g stroke="#64748B" stroke-opacity="0.06">
+    <path d="M0 60H1200M0 120H1200M0 180H1200M0 240H1200M0 300H1200"/>
+  </g>
+
+  <text x="40" y="48" font-family="Consolas,monospace" font-size="15" letter-spacing="3" fill="#64748B">DATA FLOW  -  HARDWARE TO APP</text>
+
+  <!-- connectors -->
+  <g stroke="#475569" stroke-width="2" marker-end="url(#arrow)" fill="none">
+    <path d="M255 185 H322"/>
+    <path d="M575 185 H642"/>
+    <path d="M855 185 H922"/>
+  </g>
+
+  <!-- flowing telemetry packets -->
+  <g fill="#22C55E">
+    <circle r="5"><animateMotion dur="1.6s" repeatCount="indefinite" path="M255,185 H322"/></circle>
+    <circle r="5"><animateMotion dur="1.6s" begin="0.3s" repeatCount="indefinite" path="M575,185 H642"/></circle>
+    <circle r="5" fill="#38BDF8"><animateMotion dur="1.6s" begin="0.6s" repeatCount="indefinite" path="M855,185 H922"/></circle>
+  </g>
+
+  <!-- Box 1 : Sensors -->
+  <g transform="translate(40,110)">
+    <rect width="215" height="150" rx="16" fill="#1E293B" stroke="#2B3A52"/>
+    <circle cx="34" cy="34" r="14" fill="#22C55E" fill-opacity="0.18" stroke="#22C55E" stroke-opacity="0.5"/>
+    <text x="58" y="40" font-family="Verdana,sans-serif" font-size="17" font-weight="700" fill="#F8FAFC">Sensors</text>
+    <g font-family="Consolas,monospace" font-size="13" fill="#94A3B8">
+      <text x="20" y="72">BH1750  lux (I2C)</text>
+      <text x="20" y="94">LDR     ambient</text>
+      <text x="20" y="116">ACS712  current</text>
+      <text x="20" y="138">DS3231  RTC clock</text>
+    </g>
+  </g>
+
+  <!-- Box 2 : ESP32 -->
+  <g transform="translate(330,110)">
+    <rect width="245" height="150" rx="16" fill="#1E293B" stroke="#22C55E" stroke-opacity="0.45"/>
+    <circle cx="34" cy="34" r="14" fill="#22C55E" fill-opacity="0.18" stroke="#22C55E" stroke-opacity="0.6"/>
+    <text x="58" y="40" font-family="Verdana,sans-serif" font-size="17" font-weight="700" fill="#F8FAFC">ESP32 DOIT</text>
+    <g font-family="Consolas,monospace" font-size="13" fill="#94A3B8">
+      <text x="20" y="72">EMA filter (DSP)</text>
+      <text x="20" y="94">PID to 500 lux</text>
+      <text x="20" y="116">safety state machine</text>
+      <text x="20" y="138">relay + AC dimmer</text>
+    </g>
+  </g>
+
+  <!-- Box 3 : WiFi -->
+  <g transform="translate(650,110)">
+    <rect width="205" height="150" rx="16" fill="#1E293B" stroke="#F59E0B" stroke-opacity="0.4"/>
+    <circle cx="34" cy="34" r="14" fill="#F59E0B" fill-opacity="0.18" stroke="#F59E0B" stroke-opacity="0.55"/>
+    <text x="58" y="40" font-family="Verdana,sans-serif" font-size="17" font-weight="700" fill="#F8FAFC">WiFi LAN</text>
+    <g font-family="Consolas,monospace" font-size="13" fill="#94A3B8">
+      <text x="20" y="72">HTTP server :80</text>
+      <text x="20" y="94">GET /telemetry</text>
+      <text x="20" y="116">GET /health</text>
+      <text x="20" y="138">mDNS saqelar.local</text>
+    </g>
+  </g>
+
+  <!-- Box 4 : App -->
+  <g transform="translate(930,110)">
+    <rect width="230" height="150" rx="16" fill="#1E293B" stroke="#38BDF8" stroke-opacity="0.4"/>
+    <circle cx="34" cy="34" r="14" fill="#38BDF8" fill-opacity="0.18" stroke="#38BDF8" stroke-opacity="0.55"/>
+    <text x="58" y="40" font-family="Verdana,sans-serif" font-size="17" font-weight="700" fill="#F8FAFC">Saqelar App</text>
+    <g font-family="Consolas,monospace" font-size="13" fill="#94A3B8">
+      <text x="20" y="72">poll every 1s</text>
+      <text x="20" y="94">Telemetry.fromJson</text>
+      <text x="20" y="116">dashboard + gauge</text>
+      <text x="20" y="138">badge SIM / DEVICE</text>
+    </g>
+  </g>
+
+  <!-- connector captions -->
+  <g font-family="Consolas,monospace" font-size="11" fill="#64748B" text-anchor="middle">
+    <text x="288" y="172">read</text>
+    <text x="608" y="172">JSON</text>
+    <text x="888" y="172">poll</text>
+  </g>
+
+  <text x="40" y="312" font-family="Consolas,monospace" font-size="12" fill="#475569">device.telemetry.v1  -  one shared contract, no simulation when device is reachable</text>
+</svg>
