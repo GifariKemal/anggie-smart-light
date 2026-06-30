@@ -90,10 +90,10 @@ This is the single most important rule of the project. One contract, two faithfu
 ```mermaid
 stateDiagram-v2
   [*] --> SAFE_PID_ACTIVE
-  SAFE_PID_ACTIVE --> OVERCURRENT_TRIP: current > 5 A
+  SAFE_PID_ACTIVE --> OVERCURRENT_TRIP: current over 5 A
   SAFE_PID_ACTIVE --> NIGHT_MODE: hour in night window
-  SAFE_PID_ACTIVE --> DAYLIGHT_OFF: filtered LDR > 3000
-  NIGHT_MODE --> OVERCURRENT_TRIP: current > 5 A
+  SAFE_PID_ACTIVE --> DAYLIGHT_OFF: filtered LDR over 3000
+  NIGHT_MODE --> OVERCURRENT_TRIP: current over 5 A
   DAYLIGHT_OFF --> SAFE_PID_ACTIVE: ambient drops
   OVERCURRENT_TRIP --> SAFE_PID_ACTIVE: current safe again
 ```
