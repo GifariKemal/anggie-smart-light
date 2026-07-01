@@ -84,7 +84,7 @@ unsigned long lastPidTime = 0, lastPrintTime = 0, lastMqttAttempt = 0;
 // Telemetry contract (device.telemetry.v1)
 // ---------------------------------------------------------------------------
 const char DEVICE_ID[]        = "anggie-001";
-const char FIRMWARE_VERSION[] = "0.6.0";
+const char FIRMWARE_VERSION[] = "0.7.0";
 const char TELEMETRY_SCHEMA[] = "device.telemetry.v1";
 uint32_t   telemetrySeq       = 0;
 
@@ -274,6 +274,17 @@ void startNetwork() {
 
   Serial.print("WiFi: terhubung, IP = ");
   Serial.println(WiFi.localIP());
+
+  // Sync RTC from NTP so telemetry timestamps are real wall-clock (WIB = UTC+7).
+  configTime(7 * 3600, 0, "pool.ntp.org", "time.google.com");
+  struct tm ntp;
+  if (getLocalTime(&ntp, 10000)) {
+    rtc.adjust(DateTime(ntp.tm_year + 1900, ntp.tm_mon + 1, ntp.tm_mday,
+                        ntp.tm_hour, ntp.tm_min, ntp.tm_sec));
+    Serial.println("RTC: sinkron dari NTP (WIB).");
+  } else {
+    Serial.println("RTC: NTP timeout, pakai waktu RTC lama.");
+  }
 
   clientId = String("anggie-001-") + String((uint32_t)ESP.getEfuseMac(), HEX);
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);

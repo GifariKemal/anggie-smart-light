@@ -223,8 +223,11 @@ class _Header extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge),
                 Row(
                   children: [
-                    Text('${t.deviceId} · seq ${t.seq}  ·  ',
-                        style: AppTheme.monoLabel.copyWith(fontSize: 10)),
+                    Flexible(
+                      child: Text('${t.deviceId} · seq ${t.seq}  ·  ',
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.monoLabel.copyWith(fontSize: 10)),
+                    ),
                     Text(src,
                         style: AppTheme.monoLabel
                             .copyWith(fontSize: 10, color: srcColor)),

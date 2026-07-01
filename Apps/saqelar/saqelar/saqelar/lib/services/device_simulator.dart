@@ -177,6 +177,7 @@ class DeviceSimulator extends ChangeNotifier {
       _setLive(true);
       connectionStatus = 'Device live · $broker';
       _latest = t;
+      _reconcileControls(t);
       _luxHistory.add(t.lux);
       _powerHistory.add(t.powerW);
       if (_luxHistory.length > _historyLen) _luxHistory.removeAt(0);
@@ -236,6 +237,34 @@ class DeviceSimulator extends ChangeNotifier {
   bool simulateDaylight = false;
   bool simulateOvercurrent = false;
 
+  // When live, controls mirror the device's reported state. Pause that mirror
+  // briefly after a local nudge so telemetry echo doesn't fight the user.
+  DateTime? _controlEditAt;
+  void _touchControl() => _controlEditAt = DateTime.now();
+
+  DeviceMode _modeFromWire(String w) => switch (w) {
+        'manual' => DeviceMode.manual,
+        'off' => DeviceMode.off,
+        _ => DeviceMode.auto, // 'auto' and 'night' both present as auto
+      };
+
+  /// Reflect device-reported state in the operator controls while live.
+  void _reconcileControls(Telemetry t) {
+    if (_controlEditAt != null &&
+        DateTime.now().difference(_controlEditAt!).inMilliseconds < 2500) {
+      return;
+    }
+    mode = _modeFromWire(t.mode);
+    targetLux = t.targetLux;
+    kp = t.kp;
+    ki = t.ki;
+    kd = t.kd;
+    // dimmerPct is the PID output in auto; only the manual setpoint is meaningful.
+    if (t.mode == 'manual') {
+      manualDimmer = t.dimmerPct.clamp(0, FirmwareConstants.dimmerMaxPct);
+    }
+  }
+
   void Function()? onFaultEnter;
   String _lastSafetyState = 'ok';
 
@@ -262,6 +291,7 @@ class DeviceSimulator extends ChangeNotifier {
 
   void setMode(DeviceMode m) {
     mode = m;
+    _touchControl();
     _save();
     if (isLive) publishCommand({'mode': m.wire});
     notifyListeners();
@@ -269,6 +299,7 @@ class DeviceSimulator extends ChangeNotifier {
 
   void setTargetLux(double v) {
     targetLux = v.clamp(0, FirmwareConstants.maxTargetLux);
+    _touchControl();
     _save();
     if (isLive) publishCommand({'targetLux': targetLux});
     notifyListeners();
@@ -276,6 +307,7 @@ class DeviceSimulator extends ChangeNotifier {
 
   void setManualDimmer(int v) {
     manualDimmer = v.clamp(0, FirmwareConstants.dimmerMaxPct);
+    _touchControl();
     _save();
     if (isLive) publishCommand({'dimmer': manualDimmer});
     notifyListeners();
@@ -285,6 +317,7 @@ class DeviceSimulator extends ChangeNotifier {
     this.kp = kp ?? this.kp;
     this.ki = ki ?? this.ki;
     this.kd = kd ?? this.kd;
+    _touchControl();
     _save();
     if (isLive) publishCommand({'kp': this.kp, 'ki': this.ki, 'kd': this.kd});
     notifyListeners();
