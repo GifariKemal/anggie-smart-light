@@ -49,4 +49,30 @@ class Sfx {
     HapticFeedback.heavyImpact();
     _play('alert.ogg');
   }
+
+  // ---- Live-link + device event cues ----
+  void connect() {
+    HapticFeedback.mediumImpact();
+    _play('connect.ogg');
+  }
+
+  void disconnect() {
+    HapticFeedback.lightImpact();
+    _play('disconnect.ogg');
+  }
+
+  void command() {
+    HapticFeedback.selectionClick();
+    _play('command.ogg');
+  }
+
+  void night() {
+    HapticFeedback.selectionClick();
+    _play('night.ogg');
+  }
+
+  void fault() {
+    HapticFeedback.heavyImpact();
+    _play('fault.ogg');
+  }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:saqelar/app/app_theme.dart';
 import 'package:saqelar/models/telemetry.dart';
 import 'package:saqelar/screens/control_screen.dart';
@@ -21,6 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     duration: const Duration(milliseconds: 950),
   );
   bool _wired = false;
+  int _faultTick = 0; // bumped on each fault entry so the shake replays once
 
   @override
   void didChangeDependencies() {
@@ -30,12 +32,18 @@ class _DashboardScreenState extends State<DashboardScreen>
     final sim = DeviceScope.of(context);
     // Fault alarm sound, driven by the simulator (never from build()).
     sim.onFaultEnter = () {
-      if (mounted) Sfx.instance.alert();
+      if (!mounted) return;
+      Sfx.instance.fault();
+      setState(() => _faultTick++);
+    };
+    // Soft chime when the lamp slips into night mode.
+    sim.onNightEnter = () {
+      if (mounted) Sfx.instance.night();
     };
     // Command acknowledgement from the device.
     sim.onAck = (_) {
       if (!mounted) return;
-      Sfx.instance.select();
+      Sfx.instance.command();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -59,7 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     // Connection notification when the live link flips.
     sim.onLiveChange = (live) {
       if (!mounted) return;
-      live ? Sfx.instance.success() : Sfx.instance.tap();
+      live ? Sfx.instance.connect() : Sfx.instance.disconnect();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -98,6 +106,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   void dispose() {
     _reveal.dispose();
     super.dispose();
+  }
+
+  // One-shot shake when the lamp enters a fault; keyed so it plays once per
+  // episode (not on every telemetry rebuild). Honors reduced-motion.
+  Widget _faultShake(Widget child, Telemetry t) {
+    if (!t.isFault || AppTheme.reducedMotion(context)) return child;
+    return child
+        .animate(key: ValueKey('fault$_faultTick'))
+        .shakeX(duration: 450.ms, hz: 4, amount: 5);
   }
 
   Widget _item(int i, Widget child) {
@@ -157,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                         sliver: SliverList.list(
                           children: [
-                            _item(0, _HeroPanel(t: t)),
+                            _item(0, _faultShake(_HeroPanel(t: t), t)),
                             const SizedBox(height: 14),
                             _item(1, _MetricsGrid(t: t)),
                             const SizedBox(height: 14),
@@ -228,9 +245,22 @@ class _Header extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: AppTheme.monoLabel.copyWith(fontSize: 10)),
                     ),
-                    Text(src,
-                        style: AppTheme.monoLabel
-                            .copyWith(fontSize: 10, color: srcColor)),
+                    Builder(builder: (context) {
+                      final badge = Text(src,
+                          style: AppTheme.monoLabel
+                              .copyWith(fontSize: 10, color: srcColor));
+                      if (!sim.isLive || AppTheme.reducedMotion(context)) {
+                        return badge;
+                      }
+                      // A slow shimmer sweep signals a live device link.
+                      return badge
+                          .animate(onPlay: (c) => c.repeat())
+                          .shimmer(
+                            duration: 1500.ms,
+                            delay: 2500.ms,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          );
+                    }),
                   ],
                 ),
               ],
@@ -753,8 +783,8 @@ Route<T> _slideFadeRoute<T>(Widget page) {
   return PageRouteBuilder<T>(
     transitionDuration: const Duration(milliseconds: 320),
     reverseTransitionDuration: const Duration(milliseconds: 240),
-    pageBuilder: (_, __, ___) => page,
-    transitionsBuilder: (_, anim, __, child) {
+    pageBuilder: (_, _, _) => page,
+    transitionsBuilder: (_, anim, _, child) {
       final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
       return FadeTransition(
         opacity: curved,

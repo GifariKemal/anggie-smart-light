@@ -63,8 +63,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 420),
-        pageBuilder: (_, __, ___) => const DashboardScreen(),
-        transitionsBuilder: (_, anim, __, child) => FadeTransition(
+        pageBuilder: (_, _, _) => const DashboardScreen(),
+        transitionsBuilder: (_, anim, _, child) => FadeTransition(
           opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
           child: child,
         ),

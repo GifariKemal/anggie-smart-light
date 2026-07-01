@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:saqelar/app/app_theme.dart';
 import 'package:saqelar/models/telemetry.dart';
 import 'package:saqelar/services/device_scope.dart';
@@ -150,6 +151,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         ),
                       ),
+                      if (!sim.isSimulated) ...[
+                        SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: Lottie.asset(
+                            'assets/lottie/bluetoothscanning.json',
+                            delegates: LottieDelegates(values: [
+                              ValueDelegate.color(const ['**'], value: color),
+                            ]),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
                       StatusBadge(
                         label: live
                             ? 'DEVICE'

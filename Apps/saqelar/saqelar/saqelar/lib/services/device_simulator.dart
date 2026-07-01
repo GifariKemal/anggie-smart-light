@@ -178,6 +178,7 @@ class DeviceSimulator extends ChangeNotifier {
       connectionStatus = 'Device live · $broker';
       _latest = t;
       _reconcileControls(t);
+      _announceMode(t.mode);
       _luxHistory.add(t.lux);
       _powerHistory.add(t.powerW);
       if (_luxHistory.length > _historyLen) _luxHistory.removeAt(0);
@@ -266,7 +267,14 @@ class DeviceSimulator extends ChangeNotifier {
   }
 
   void Function()? onFaultEnter;
+  void Function()? onNightEnter; // fired when the lamp first enters night mode
   String _lastSafetyState = 'ok';
+  String _lastMode = 'auto';
+
+  void _announceMode(String m) {
+    if (m == 'night' && _lastMode != 'night') onNightEnter?.call();
+    _lastMode = m;
+  }
 
   // ---- Internal sim state ----
   late final DateTime _start;
@@ -453,6 +461,7 @@ class DeviceSimulator extends ChangeNotifier {
       onFaultEnter?.call();
     }
     _lastSafetyState = safety;
+    _announceMode(night ? 'night' : mode.wire);
 
     notifyListeners();
   }
