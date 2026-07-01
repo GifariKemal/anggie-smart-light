@@ -89,7 +89,9 @@ The app auto-connects to the default broker and topic on launch, so integration 
 | Signal | Where |
 | :-- | :-- |
 | Indicator | Header badge: `SIM` or `DEVICE` |
-| Notification | Floating SnackBar on connect and on fallback |
+| Notification | Floating SnackBar on connect, fallback, and command ack |
+| Command ack | Device confirms each command on the ack topic |
+| Activity log | Settings screen keeps a timestamped feed of every step |
 | Fallback | Local simulator, automatic after a six second silence |
 
 ---

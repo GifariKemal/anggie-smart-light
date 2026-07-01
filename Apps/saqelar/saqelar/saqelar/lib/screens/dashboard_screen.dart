@@ -32,6 +32,30 @@ class _DashboardScreenState extends State<DashboardScreen>
     sim.onFaultEnter = () {
       if (mounted) Sfx.instance.alert();
     };
+    // Command acknowledgement from the device.
+    sim.onAck = (_) {
+      if (!mounted) return;
+      Sfx.instance.select();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            backgroundColor: AppTheme.surface,
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle_rounded,
+                    color: AppTheme.accent, size: 18),
+                SizedBox(width: 10),
+                Text('Device: perintah diterapkan',
+                    style: TextStyle(color: AppTheme.ink)),
+              ],
+            ),
+          ),
+        );
+      });
+    };
     // Connection notification when the live link flips.
     sim.onLiveChange = (live) {
       if (!mounted) return;

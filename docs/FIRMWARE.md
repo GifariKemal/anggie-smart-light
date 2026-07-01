@@ -152,7 +152,7 @@ The firmware subscribes to `suriota/anggie-001/command` and applies incoming JSO
 { "mode": "manual", "dimmer": 55 }
 ```
 
-The app publishes these automatically from the Control panel while connected, so you normally never send them by hand.
+After applying a command the firmware publishes an acknowledgement (`device.ack.v1`) to `suriota/anggie-001/ack`, so every command has a feedback response. The app publishes commands automatically from the Control panel while connected, so you normally never send them by hand.
 
 ---
 

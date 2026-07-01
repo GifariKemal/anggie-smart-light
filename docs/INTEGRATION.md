@@ -45,9 +45,10 @@ Public broker `broker.emqx.io` on plain TCP port `1883` (no TLS).
 | Topic | Direction | Payload |
 | :-- | :-- | :-- |
 | `suriota/anggie-001/telemetry` | device publishes, app reads | `device.telemetry.v1` JSON, once per second |
-| `suriota/anggie-001/command` | app publishes, device reads | JSON command (future control feature) |
+| `suriota/anggie-001/command` | app publishes, device reads | JSON control command |
+| `suriota/anggie-001/ack` | device publishes, app reads | `device.ack.v1` JSON, one per applied command |
 
-All device data is carried in the single telemetry topic. Control adds a second topic later, so read and write stay cleanly separated.
+All live device data is carried in the telemetry topic. Control writes go to the command topic, and every command gets a feedback response on the ack topic. The app also keeps an on screen Activity Log of every step (connect, command sent, ack, fault, fallback).
 
 ```bash
 # watch live telemetry from any machine with mosquitto tools

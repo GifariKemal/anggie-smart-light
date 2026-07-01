@@ -47,7 +47,8 @@ const int   PORTAL_TIMEOUT = 180;            // seconds the portal stays open
 const char* MQTT_BROKER    = "broker.emqx.io";
 const int   MQTT_PORT      = 1883;
 const char* TOPIC_TELEMETRY = "suriota/anggie-001/telemetry"; // device -> app
-const char* TOPIC_COMMAND   = "suriota/anggie-001/command";   // app -> device (future)
+const char* TOPIC_COMMAND   = "suriota/anggie-001/command";   // app -> device
+const char* TOPIC_ACK       = "suriota/anggie-001/ack";       // device -> app (command feedback)
 
 // ---------------------------------------------------------------------------
 // System limits / tuning
@@ -83,7 +84,7 @@ unsigned long lastPidTime = 0, lastPrintTime = 0, lastMqttAttempt = 0;
 // Telemetry contract (device.telemetry.v1)
 // ---------------------------------------------------------------------------
 const char DEVICE_ID[]        = "anggie-001";
-const char FIRMWARE_VERSION[] = "0.5.0";
+const char FIRMWARE_VERSION[] = "0.6.0";
 const char TELEMETRY_SCHEMA[] = "device.telemetry.v1";
 uint32_t   telemetrySeq       = 0;
 
@@ -214,6 +215,28 @@ void onCommand(char* topic, byte* payload, unsigned int length) {
   if (!doc["kp"].isNull()) Kp = doc["kp"].as<double>();
   if (!doc["ki"].isNull()) Ki = doc["ki"].as<double>();
   if (!doc["kd"].isNull()) Kd = doc["kd"].as<double>();
+
+  // Acknowledge back to the app so every command has a feedback response.
+  JsonDocument ack;
+  char ackTs[32];
+  buildTimestamp(rtc.now(), ackTs, sizeof(ackTs));
+  ack["schema"] = "device.ack.v1";
+  ack["deviceId"] = DEVICE_ID;
+  ack["ok"] = true;
+  ack["ts"] = ackTs;
+  if (!doc["mode"].isNull()) ack["mode"] = doc["mode"].as<const char*>();
+  if (!doc["targetLux"].isNull()) ack["targetLux"] = targetLux;
+  if (!doc["dimmer"].isNull()) ack["dimmer"] = manualDimmer;
+  if (!doc["kp"].isNull()) {
+    ack["kp"] = Kp;
+    ack["ki"] = Ki;
+    ack["kd"] = Kd;
+  }
+  char ackBuf[256];
+  serializeJson(ack, ackBuf, sizeof(ackBuf));
+  if (mqtt.connected()) mqtt.publish(TOPIC_ACK, ackBuf);
+  Serial.print("Command applied, ack: ");
+  Serial.println(ackBuf);
 }
 
 // Non-blocking reconnect so the control + safety loop never stalls.

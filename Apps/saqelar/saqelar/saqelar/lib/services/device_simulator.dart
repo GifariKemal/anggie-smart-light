@@ -9,6 +9,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/telemetry.dart';
 
+/// One timestamped activity-log entry shown in the app.
+class LogEntry {
+  LogEntry(this.time, this.message, this.level);
+  final DateTime time;
+  final String message;
+  final String level; // info | ok | warn | err
+}
+
 /// Telemetry source. Runs a local simulation by default and, when an MQTT
 /// broker + topic are configured, subscribes and shows real device data
 /// (device.telemetry.v1). The control loop mirrors `Anggie.ino` so both
@@ -52,6 +60,8 @@ class DeviceSimulator extends ChangeNotifier {
   void _setLive(bool v) {
     if (isLive != v) {
       isLive = v;
+      _log(v ? 'Device live (DEVICE)' : 'Fallback ke simulator (SIM)',
+          v ? 'ok' : 'warn');
       onLiveChange?.call(v);
     }
   }
@@ -81,12 +91,28 @@ class DeviceSimulator extends ChangeNotifier {
 
   bool get isSimulated => broker == null;
 
+  String get ackTopic => (topic ?? '').contains('/telemetry')
+      ? (topic ?? '').replaceAll('/telemetry', '/ack')
+      : '${topic ?? ''}/ack';
+
+  // ---- Activity log (feedback for every process) ----
+  final List<LogEntry> _logs = [];
+  List<LogEntry> get logs => List.unmodifiable(_logs.reversed);
+  void Function(String message)? onAck; // fired when the device confirms a command
+
+  void _log(String message, [String level = 'info']) {
+    _logs.add(LogEntry(DateTime.now(), message, level));
+    if (_logs.length > 50) _logs.removeAt(0);
+    notifyListeners();
+  }
+
   /// Connect to an MQTT broker and subscribe to a telemetry topic. Device data
   /// then replaces the simulation. Persists so it reconnects on next launch.
   Future<void> connect(String brokerHost, String telemetryTopic) async {
     broker = brokerHost.trim();
     topic = telemetryTopic.trim();
     connectionStatus = 'Menyambung ke $broker ...';
+    _log('Menyambung ke $broker, topic $topic');
     _prefs?.setString('mqttBroker', broker!);
     _prefs?.setString('mqttTopic', topic!);
     _prefs?.setBool('mqttAuto', true);
@@ -107,30 +133,43 @@ class DeviceSimulator extends ChangeNotifier {
       await c.connect();
     } catch (e) {
       connectionStatus = 'Gagal konek broker';
+      _log('Gagal konek broker', 'err');
       _setLive(false);
       notifyListeners();
       return;
     }
     c.subscribe(topic!, MqttQos.atMostOnce);
+    c.subscribe(ackTopic, MqttQos.atMostOnce);
     c.updates?.listen(_onMessage);
   }
 
   void _onConnected() {
     connectionStatus = 'Terhubung, menunggu data ...';
-    if (topic != null) _mqtt?.subscribe(topic!, MqttQos.atMostOnce);
+    if (topic != null) {
+      _mqtt?.subscribe(topic!, MqttQos.atMostOnce);
+      _mqtt?.subscribe(ackTopic, MqttQos.atMostOnce);
+    }
+    _log('Broker terhubung, subscribe telemetry + ack', 'ok');
     notifyListeners();
   }
 
   void _onDisconnected() {
     _setLive(false);
     connectionStatus = 'Broker terputus';
+    _log('Broker terputus', 'warn');
     notifyListeners();
   }
 
   void _onMessage(List<MqttReceivedMessage<MqttMessage>> events) {
+    final topic0 = events.first.topic;
     final rec = events.first.payload as MqttPublishMessage;
     final text =
         MqttPublishPayload.bytesToStringAsString(rec.payload.message);
+    if (topic0 == ackTopic) {
+      _log('Device ACK: $text', 'ok');
+      onAck?.call(text);
+      return;
+    }
     try {
       final json = jsonDecode(text) as Map<String, dynamic>;
       final t = Telemetry.fromJson(json);
@@ -142,7 +181,10 @@ class DeviceSimulator extends ChangeNotifier {
       _powerHistory.add(t.powerW);
       if (_luxHistory.length > _historyLen) _luxHistory.removeAt(0);
       if (_powerHistory.length > _historyLen) _powerHistory.removeAt(0);
-      if (t.isFault && _lastSafetyState != 'fault') onFaultEnter?.call();
+      if (t.isFault && _lastSafetyState != 'fault') {
+        _log('FAULT device: ${t.faultReason ?? 'unknown'}', 'err');
+        onFaultEnter?.call();
+      }
       _lastSafetyState = t.safetyState;
       notifyListeners();
     } catch (_) {
@@ -153,11 +195,14 @@ class DeviceSimulator extends ChangeNotifier {
   /// Publish a command to the device (future control feature).
   void publishCommand(Map<String, dynamic> command) {
     final c = _mqtt;
-    if (c == null || c.connectionStatus?.state != MqttConnectionState.connected) {
+    if (c == null ||
+        c.connectionStatus?.state != MqttConnectionState.connected) {
+      _log('Command tidak terkirim (tidak terhubung)', 'warn');
       return;
     }
     final builder = MqttClientPayloadBuilder()..addString(jsonEncode(command));
     c.publishMessage(commandTopic, MqttQos.atMostOnce, builder.payload!);
+    _log('Kirim command: ${jsonEncode(command)}');
   }
 
   Future<void> _disposeClient() async {
@@ -176,6 +221,7 @@ class DeviceSimulator extends ChangeNotifier {
     _prefs?.remove('mqttBroker');
     _prefs?.remove('mqttTopic');
     _prefs?.setBool('mqttAuto', false); // respect explicit disconnect
+    _log('Diputus manual, mode simulator');
     notifyListeners();
   }
 
@@ -369,7 +415,10 @@ class DeviceSimulator extends ChangeNotifier {
       uptime: DateTime.now().difference(_start),
     );
 
-    if (safety == 'fault' && _lastSafetyState != 'fault') onFaultEnter?.call();
+    if (safety == 'fault' && _lastSafetyState != 'fault') {
+      _log('FAULT (sim): ${fault ?? 'unknown'}', 'err');
+      onFaultEnter?.call();
+    }
     _lastSafetyState = safety;
 
     notifyListeners();

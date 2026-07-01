@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GifariKemal/anggie-smart-light/releases/latest/download/saqelar-v0.5.0.apk">
-    <img src="https://img.shields.io/badge/%E2%AC%87%20Download-APK%20v0.5.0-22C55E?style=for-the-badge&logo=android&logoColor=white" alt="Download APK">
+  <a href="https://github.com/GifariKemal/anggie-smart-light/releases/latest/download/saqelar-v0.6.0.apk">
+    <img src="https://img.shields.io/badge/%E2%AC%87%20Download-APK%20v0.6.0-22C55E?style=for-the-badge&logo=android&logoColor=white" alt="Download APK">
   </a>
   <a href="https://github.com/GifariKemal/anggie-smart-light/releases/latest">
     <img src="https://img.shields.io/github/v/release/GifariKemal/anggie-smart-light?style=for-the-badge&color=38BDF8&label=release" alt="latest release">

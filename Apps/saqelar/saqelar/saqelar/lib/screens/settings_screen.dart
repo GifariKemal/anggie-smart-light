@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:saqelar/app/app_theme.dart';
 import 'package:saqelar/models/telemetry.dart';
 import 'package:saqelar/services/device_scope.dart';
+import 'package:saqelar/services/device_simulator.dart';
 import 'package:saqelar/services/sfx.dart';
 import 'package:saqelar/widgets/hud_widgets.dart';
 
@@ -65,6 +66,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  Widget _logRow(LogEntry e) {
+    final c = switch (e.level) {
+      'ok' => AppTheme.accent,
+      'warn' => AppTheme.warning,
+      'err' => AppTheme.danger,
+      _ => AppTheme.muted,
+    };
+    String two(int v) => v.toString().padLeft(2, '0');
+    final t = '${two(e.time.hour)}:${two(e.time.minute)}:${two(e.time.second)}';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t, style: AppTheme.monoLabel.copyWith(fontSize: 10)),
+          const SizedBox(width: 8),
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(e.message,
+                style: const TextStyle(color: AppTheme.ink, fontSize: 12)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -197,7 +230,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'command topic (kontrol, nanti): ${sim.commandTopic}',
+                        'command topic: ${sim.commandTopic}',
+                        style: AppTheme.monoLabel.copyWith(fontSize: 10),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'ack topic: ${sim.ackTopic}',
                         style: AppTheme.monoLabel.copyWith(fontSize: 10),
                       ),
                       const SizedBox(height: 4),
@@ -208,6 +246,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 22),
+                Text('ACTIVITY LOG', style: AppTheme.monoLabel),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: sim.logs.isEmpty
+                      ? const Text('Belum ada aktivitas',
+                          style:
+                              TextStyle(color: AppTheme.faint, fontSize: 12))
+                      : Column(
+                          children:
+                              sim.logs.take(20).map(_logRow).toList(),
+                        ),
                 ),
               ],
             ),
