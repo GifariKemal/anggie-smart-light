@@ -84,7 +84,13 @@ The app has one source object that can run in two modes:
   <img src="assets/diagrams/app-source.svg" alt="Live device or simulator source" width="100%">
 </p>
 
-Set the broker and topic in the Settings screen. When telemetry arrives the dashboard shows real values and the simulation pauses. If the stream goes quiet for six seconds the app falls back to simulation. Broker and topic are saved with `shared_preferences`.
+The app auto-connects to the default broker and topic on launch, so integration is hands off. When telemetry arrives the dashboard shows real values, the header badge flips to DEVICE, and a floating notification confirms the live link. If the stream goes quiet for six seconds it falls back to simulation and notifies again. You only open Settings to use a different broker or topic, or to force the simulator with Putuskan. Choices are saved with `shared_preferences`.
+
+| Signal | Where |
+| :-- | :-- |
+| Indicator | Header badge: `SIM` or `DEVICE` |
+| Notification | Floating SnackBar on connect and on fallback |
+| Fallback | Local simulator, automatic after a six second silence |
 
 ---
 

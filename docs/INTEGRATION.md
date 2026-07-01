@@ -68,11 +68,10 @@ mosquitto_sub -h broker.emqx.io -p 1883 -t "suriota/anggie-001/telemetry" -v
 
 1. 🔧 In `Anggie.ino`, set `WIFI_SSID` and `WIFI_PASS` (broker and topics have defaults), then flash the ESP32.
 2. 🖥️ Open Serial Monitor at 115200 and confirm `MQTT connected` plus a published telemetry line.
-3. 📱 In the app, open Settings from the dashboard gear icon.
-4. ⌨️ Keep the defaults `broker.emqx.io` and `suriota/anggie-001/telemetry`, or match your own, then tap Sambungkan.
-5. 🟢 The header badge changes from SIM to DEVICE and the dashboard shows real data.
+3. 📱 The app auto-connects to the default broker and topic on launch. To use different values, open Settings from the gear icon, edit them, and tap Sambungkan.
+4. 🟢 When telemetry arrives the header badge flips SIM to DEVICE and a notification confirms the live link.
 
-To go back to the simulator, tap Putuskan.
+To force the simulator, tap Putuskan. The app also falls back on its own after six seconds without data.
 
 ---
 

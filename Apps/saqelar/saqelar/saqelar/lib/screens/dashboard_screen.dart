@@ -27,9 +27,41 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.didChangeDependencies();
     if (_wired) return;
     _wired = true;
+    final sim = DeviceScope.of(context);
     // Fault alarm sound, driven by the simulator (never from build()).
-    DeviceScope.of(context).onFaultEnter = () {
+    sim.onFaultEnter = () {
       if (mounted) Sfx.instance.alert();
+    };
+    // Connection notification when the live link flips.
+    sim.onLiveChange = (live) {
+      if (!mounted) return;
+      live ? Sfx.instance.success() : Sfx.instance.tap();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            backgroundColor: AppTheme.surface,
+            content: Row(
+              children: [
+                Icon(
+                  live ? Icons.sensors_rounded : Icons.sensors_off_rounded,
+                  color: live ? AppTheme.accent : AppTheme.warning,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  live
+                      ? 'Device terhubung, data live'
+                      : 'Device terputus, mode simulator',
+                  style: const TextStyle(color: AppTheme.ink),
+                ),
+              ],
+            ),
+          ),
+        );
+      });
     };
     if (AppTheme.reducedMotion(context)) {
       _reveal.value = 1;
@@ -141,10 +173,8 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sim = DeviceScope.of(context);
-    final src = sim.isLive ? 'DEVICE' : (sim.isSimulated ? 'SIM' : 'OFFLINE');
-    final srcColor = sim.isLive
-        ? AppTheme.accent
-        : (sim.isSimulated ? AppTheme.info : AppTheme.warning);
+    final src = sim.isLive ? 'DEVICE' : 'SIM';
+    final srcColor = sim.isLive ? AppTheme.accent : AppTheme.info;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 12),
       child: Row(

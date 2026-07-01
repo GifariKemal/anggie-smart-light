@@ -37,10 +37,23 @@ class DeviceSimulator extends ChangeNotifier {
     kp = p.getDouble('kp') ?? kp;
     ki = p.getDouble('ki') ?? ki;
     kd = p.getDouble('kd') ?? kd;
-    final b = p.getString('mqttBroker');
-    final t = p.getString('mqttTopic');
+    // Automatic by default: connect to saved or default broker/topic on launch,
+    // unless the user explicitly disconnected before.
+    final b = p.getString('mqttBroker') ?? FirmwareConstants.mqttBroker;
+    final t = p.getString('mqttTopic') ?? FirmwareConstants.mqttTelemetryTopic;
+    final auto = p.getBool('mqttAuto') ?? true;
     notifyListeners();
-    if (b != null && b.isNotEmpty && t != null && t.isNotEmpty) connect(b, t);
+    if (auto && b.isNotEmpty && t.isNotEmpty) connect(b, t);
+  }
+
+  /// Fired when the live link flips (true = device data, false = simulator),
+  /// so the UI can show a connect / fallback notification.
+  void Function(bool live)? onLiveChange;
+  void _setLive(bool v) {
+    if (isLive != v) {
+      isLive = v;
+      onLiveChange?.call(v);
+    }
   }
 
   void _save() {
@@ -76,6 +89,7 @@ class DeviceSimulator extends ChangeNotifier {
     connectionStatus = 'Menyambung ke $broker ...';
     _prefs?.setString('mqttBroker', broker!);
     _prefs?.setString('mqttTopic', topic!);
+    _prefs?.setBool('mqttAuto', true);
     notifyListeners();
 
     await _disposeClient();
@@ -93,7 +107,7 @@ class DeviceSimulator extends ChangeNotifier {
       await c.connect();
     } catch (e) {
       connectionStatus = 'Gagal konek broker';
-      isLive = false;
+      _setLive(false);
       notifyListeners();
       return;
     }
@@ -108,7 +122,7 @@ class DeviceSimulator extends ChangeNotifier {
   }
 
   void _onDisconnected() {
-    isLive = false;
+    _setLive(false);
     connectionStatus = 'Broker terputus';
     notifyListeners();
   }
@@ -121,7 +135,7 @@ class DeviceSimulator extends ChangeNotifier {
       final json = jsonDecode(text) as Map<String, dynamic>;
       final t = Telemetry.fromJson(json);
       _lastMsg = DateTime.now();
-      isLive = true;
+      _setLive(true);
       connectionStatus = 'Device live · $broker';
       _latest = t;
       _luxHistory.add(t.lux);
@@ -157,10 +171,11 @@ class DeviceSimulator extends ChangeNotifier {
     _disposeClient();
     broker = null;
     topic = null;
-    isLive = false;
+    _setLive(false);
     connectionStatus = 'Simulator';
     _prefs?.remove('mqttBroker');
     _prefs?.remove('mqttTopic');
+    _prefs?.setBool('mqttAuto', false); // respect explicit disconnect
     notifyListeners();
   }
 
@@ -240,7 +255,7 @@ class DeviceSimulator extends ChangeNotifier {
     if (isLive &&
         _lastMsg != null &&
         DateTime.now().difference(_lastMsg!).inSeconds > 6) {
-      isLive = false;
+      _setLive(false);
       connectionStatus = 'Device diam, kembali ke simulator';
     }
     if (isLive) return; // live device drives the data; skip simulation
