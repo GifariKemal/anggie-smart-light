@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/compile-0%20error%200%20warning-22C55E?style=flat-square" alt="compile">
 </p>
 
-ESP32 firmware (`Anggie.ino`) for a closed loop smart light. It keeps a work area near a target brightness with a PID controller, filters noisy sensors, protects the load with a safety state machine, and publishes telemetry over Serial and WiFi HTTP.
+ESP32 firmware (`Anggie.ino`) for a closed loop smart light. It keeps a work area near a target brightness with a PID controller, filters noisy sensors, protects the load with a safety state machine, and publishes telemetry over Serial and MQTT.
 
 ---
 
@@ -24,7 +24,7 @@ ESP32 firmware (`Anggie.ino`) for a closed loop smart light. It keeps a work are
 | [Control logic](#-control-logic) | EMA, PID, and state machine |
 | [Telemetry](#-telemetry-contract) | The shared JSON contract |
 | [Build and flash](#-build-and-flash) | arduino-cli commands |
-| [WiFi setup](#-wifi-setup) | Live link configuration |
+| [WiFi and MQTT setup](#-wifi-and-mqtt-setup) | Live link configuration |
 | [Serial output](#-serial-output) | What you see on the monitor |
 | [Safety](#-safety-notes) | High voltage warning |
 
@@ -146,23 +146,27 @@ arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 --warnings all .
 arduino-cli upload --fqbn esp32:esp32:esp32doit-devkit-v1 -p COM5 .
 ```
 
-Required libraries: `ArduinoJson`, `RBDdimmer`, `ACS712`, `BH1750`, `RTClib`, `Adafruit BusIO`. WiFi, WebServer, and ESPmDNS ship with the ESP32 core.
+Required libraries: `PubSubClient`, `ArduinoJson`, `RBDdimmer`, `ACS712`, `BH1750`, `RTClib`, `Adafruit BusIO`. WiFi ships with the ESP32 core.
 
 > ⚠️ RBDdimmer from RobotDyn may need a local patch for ESP32 core 3.x. Keep the patched copy in your Arduino libraries folder.
 
 ---
 
-## 🌐 WiFi setup
+## 🌐 WiFi and MQTT setup
 
 Edit the top of `Anggie.ino`:
 
 ```cpp
 const char* WIFI_SSID = "your-2g-ssid";
 const char* WIFI_PASS = "your-password";
-const char* MDNS_HOST = "saqelar";   // http://saqelar.local
+
+const char* MQTT_BROKER     = "broker.emqx.io";
+const int   MQTT_PORT       = 1883;                          // plain TCP, no TLS
+const char* TOPIC_TELEMETRY = "suriota/anggie-001/telemetry"; // device publishes
+const char* TOPIC_COMMAND   = "suriota/anggie-001/command";   // device subscribes (future control)
 ```
 
-Leave both blank to run offline, where Serial telemetry still works. On connect, the firmware prints its IP and starts an HTTP server on port 80 with `GET /telemetry` and `GET /health`.
+Leave WiFi blank to run offline, where Serial telemetry still works. On connect, the firmware publishes a `device.telemetry.v1` JSON message to the telemetry topic once per second and subscribes to the command topic. Reconnect is non blocking, so the control and safety loop never stalls even if the broker is down.
 
 ---
 

@@ -1,11 +1,13 @@
 // ============================================================================
-//  Anggie — Smart Light Controller (ESP32 / DOIT DEVKIT V1)
+//  Anggie - Smart Light Controller (ESP32 / DOIT DEVKIT V1)
 //  PID lux control + EMA filtering + safety state machine + night mode.
-//  Exposes telemetry over Serial AND WiFi HTTP (device.telemetry.v1) so the
-//  Saqelar app can consume real data without a simulator.
+//  Telemetry is published to a single MQTT topic as device.telemetry.v1 JSON,
+//  so the Saqelar app just subscribes to the topic and integrates instantly.
 //
-//  Board : DOIT ESP32 DEVKIT V1  (esp32:esp32:esp32doit-devkit-v1)
-//  Based on FIXDIMMER.ino; telemetry contract + WiFi added for app integration.
+//  Transport : MQTT over WiFi, public broker, no TLS.
+//  Topics    : suriota/anggie-001/telemetry  (device publishes, app reads)
+//              suriota/anggie-001/command    (app publishes, device reads)  [future control]
+//  Board     : DOIT ESP32 DEVKIT V1  (esp32:esp32:esp32doit-devkit-v1)
 // ============================================================================
 
 #include <RBDdimmer.h>
@@ -15,8 +17,7 @@
 #include <RTClib.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
-#include <WebServer.h>
-#include <ESPmDNS.h>
+#include <PubSubClient.h>
 
 // ---------------------------------------------------------------------------
 // Pin map
@@ -27,21 +28,27 @@
 #define ZC_PIN    26
 #define DIM_PIN   33
 
-#define RELAY_ON  HIGH   // active-high relay module
+#define RELAY_ON  HIGH
 #define RELAY_OFF LOW
 
 // ---------------------------------------------------------------------------
-// WiFi — fill these in before flashing real hardware.
-// Leave blank to run offline (Serial telemetry still works).
+// WiFi - fill these in before flashing real hardware.
 // ---------------------------------------------------------------------------
-const char* WIFI_SSID = "";          // TODO: your 2.4GHz SSID
-const char* WIFI_PASS = "";          // TODO: your WiFi password
-const char* MDNS_HOST = "saqelar";   // -> http://saqelar.local/telemetry
+const char* WIFI_SSID = "";   // TODO: your 2.4GHz SSID
+const char* WIFI_PASS = "";   // TODO: your WiFi password
+
+// ---------------------------------------------------------------------------
+// MQTT - public broker, no TLS. Keep topics unique on a shared broker.
+// ---------------------------------------------------------------------------
+const char* MQTT_BROKER    = "broker.emqx.io";
+const int   MQTT_PORT      = 1883;
+const char* TOPIC_TELEMETRY = "suriota/anggie-001/telemetry"; // device -> app
+const char* TOPIC_COMMAND   = "suriota/anggie-001/command";   // app -> device (future)
 
 // ---------------------------------------------------------------------------
 // System limits / tuning
 // ---------------------------------------------------------------------------
-const float  MAX_SAFE_CURRENT = 5000.0;  // mA — trip relay above 5 A
+const float  MAX_SAFE_CURRENT = 5000.0;  // mA - trip relay above 5 A
 const int    LDR_DAYLIGHT     = 3000;    // filtered LDR -> daylight cutoff
 const double SETPOINT         = 500.0;   // target lux
 const int    DIMMER_CEILING   = 80;      // anti-flicker max dimmer %
@@ -59,30 +66,31 @@ const float ALPHA_LDR = 0.2f, ALPHA_CURRENT = 0.1f;
 
 const unsigned long PID_INTERVAL   = 200;
 const unsigned long PRINT_INTERVAL = 1000;
-unsigned long lastPidTime = 0, lastPrintTime = 0;
+unsigned long lastPidTime = 0, lastPrintTime = 0, lastMqttAttempt = 0;
 
 // ---------------------------------------------------------------------------
 // Telemetry contract (device.telemetry.v1)
 // ---------------------------------------------------------------------------
 const char DEVICE_ID[]        = "anggie-001";
-const char FIRMWARE_VERSION[] = "0.2.0";
+const char FIRMWARE_VERSION[] = "0.3.0";
 const char TELEMETRY_SCHEMA[] = "device.telemetry.v1";
 uint32_t   telemetrySeq       = 0;
 
 enum SystemState { SAFE_PID_ACTIVE, NIGHT_MODE, DAYLIGHT_OFF, OVERCURRENT_TRIP };
 SystemState currentState = SAFE_PID_ACTIVE;
 
-// Most recent readings, cached each loop for the telemetry snapshot.
-float lastLux = 0, lastPowerW = 0;
+float  lastLux = 0, lastPowerW = 0;
+String clientId;
 
 // ---------------------------------------------------------------------------
 // Objects
 // ---------------------------------------------------------------------------
-dimmerLamp dimmer(DIM_PIN, ZC_PIN);
-ACS712     acs(ACS_PIN, 3.3, 4095, 185);
-BH1750     lightMeter;
-RTC_DS3231 rtc;
-WebServer  server(80);
+dimmerLamp   dimmer(DIM_PIN, ZC_PIN);
+ACS712       acs(ACS_PIN, 3.3, 4095, 185);
+BH1750       lightMeter;
+RTC_DS3231   rtc;
+WiFiClient   espClient;
+PubSubClient mqtt(espClient);
 
 // ---------------------------------------------------------------------------
 // Contract mapping helpers
@@ -113,7 +121,7 @@ void buildTimestamp(const DateTime& now, char* buf, size_t len) {
            now.hour(), now.minute(), now.second());
 }
 
-// Serialize the current state into a device.telemetry.v1 document.
+// Fill a device.telemetry.v1 document.
 void buildTelemetry(JsonDocument& doc) {
   char ts[32];
   buildTimestamp(rtc.now(), ts, sizeof(ts));
@@ -151,32 +159,41 @@ void buildTelemetry(JsonDocument& doc) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP handlers
+// MQTT
 // ---------------------------------------------------------------------------
-void handleTelemetry() {
+// Incoming commands on TOPIC_COMMAND. Parsed and logged now; control actions
+// will be applied here later, with the on-device safety logic keeping authority.
+void onCommand(char* topic, byte* payload, unsigned int length) {
   JsonDocument doc;
-  buildTelemetry(doc);
-  String out;
-  serializeJson(doc, out);
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.send(200, "application/json", out);
+  DeserializationError err = deserializeJson(doc, payload, length);
+  if (err) {
+    Serial.print("MQTT command parse error: ");
+    Serial.println(err.c_str());
+    return;
+  }
+  Serial.print("MQTT command on ");
+  Serial.print(topic);
+  Serial.print(": ");
+  serializeJson(doc, Serial);
+  Serial.println();
+  // TODO(control): apply doc["targetLux"], doc["mode"], doc["relay"] safely.
 }
 
-void handleHealth() {
-  JsonDocument doc;
-  doc["status"]   = "ok";
-  doc["deviceId"] = DEVICE_ID;
-  doc["firmware"] = FIRMWARE_VERSION;
-  doc["uptimeMs"] = millis();
-  String out;
-  serializeJson(doc, out);
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.send(200, "application/json", out);
-}
-
-void handleNotFound() {
-  server.send(404, "application/json",
-              "{\"status\":\"error\",\"message\":\"not found\"}");
+// Non-blocking reconnect so the control + safety loop never stalls.
+void mqttEnsure() {
+  if (mqtt.connected()) return;
+  if (millis() - lastMqttAttempt < 5000) return;
+  lastMqttAttempt = millis();
+  if (mqtt.connect(clientId.c_str())) {
+    mqtt.subscribe(TOPIC_COMMAND);
+    Serial.print("MQTT connected as ");
+    Serial.print(clientId);
+    Serial.print(", subscribed ");
+    Serial.println(TOPIC_COMMAND);
+  } else {
+    Serial.print("MQTT connect failed, rc=");
+    Serial.println(mqtt.state());
+  }
 }
 
 void startNetwork() {
@@ -198,18 +215,18 @@ void startNetwork() {
     Serial.println("WiFi: gagal -> jalan offline (Serial only).");
     return;
   }
-
   Serial.print("WiFi: terhubung, IP = ");
   Serial.println(WiFi.localIP());
-  if (MDNS.begin(MDNS_HOST)) {
-    Serial.printf("mDNS: http://%s.local/telemetry\n", MDNS_HOST);
-  }
 
-  server.on("/telemetry", HTTP_GET, handleTelemetry);
-  server.on("/health", HTTP_GET, handleHealth);
-  server.onNotFound(handleNotFound);
-  server.begin();
-  Serial.println("HTTP: server siap di port 80 (/telemetry, /health).");
+  clientId = String("anggie-001-") + String((uint32_t)ESP.getEfuseMac(), HEX);
+  mqtt.setServer(MQTT_BROKER, MQTT_PORT);
+  mqtt.setBufferSize(512); // telemetry JSON is ~450 bytes, default 256 is too small
+  mqtt.setKeepAlive(30);
+  mqtt.setCallback(onCommand);
+  Serial.print("MQTT: broker ");
+  Serial.print(MQTT_BROKER);
+  Serial.print(" topic ");
+  Serial.println(TOPIC_TELEMETRY);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,21 +235,19 @@ void startNetwork() {
 void setup() {
   Serial.begin(115200);
 
-  // Slow I2C (50 kHz) for noise tolerance on long sensor wiring.
   Wire.begin();
-  Wire.setClock(50000);
+  Wire.setClock(50000); // slow I2C for noise tolerance
 
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, RELAY_OFF);
 
-  Serial.println("Memulai Anggie Smart Light (I2C 50kHz)...");
+  Serial.println("Memulai Anggie Smart Light (MQTT)...");
   delay(1000);
 
   if (!rtc.begin()) {
     Serial.println("Error: Modul RTC tidak terdeteksi!");
   } else {
     Serial.println("Modul RTC siap.");
-    // If the clock drifts, uncomment, set the time, flash once, then re-comment:
     // rtc.adjust(DateTime(2026, 7, 1, 8, 0, 0));
   }
   delay(1000);
@@ -327,12 +342,24 @@ void loop() {
     }
   }
 
-  // 4. Service HTTP clients.
-  if (WiFi.status() == WL_CONNECTED) server.handleClient();
+  // 4. Service MQTT (non-blocking; safety loop keeps running regardless).
+  if (WiFi.status() == WL_CONNECTED) {
+    mqttEnsure();
+    mqtt.loop();
+  }
 
-  // 5. Periodic report (human-readable + telemetry JSON).
+  // 5. Periodic report: Serial + publish telemetry JSON to the MQTT topic.
   if (currentMillis - lastPrintTime >= PRINT_INTERVAL) {
     lastPrintTime = currentMillis;
+
+    JsonDocument doc;
+    buildTelemetry(doc);
+    char buf[512];
+    serializeJson(doc, buf, sizeof(buf));
+
+    if (mqtt.connected()) {
+      mqtt.publish(TOPIC_TELEMETRY, buf);
+    }
 
     Serial.println("\n==================================");
     Serial.printf("Waktu      : %02d:%02d:%02d\n", now.hour(), now.minute(), now.second());
@@ -346,12 +373,9 @@ void loop() {
     Serial.printf("Lux        : %.0f  | LDR(EMA): %.0f\n", lastLux, emaLDR);
     Serial.printf("Dimmer     : %d%%\n", currentBrightness);
     Serial.printf("Arus/Daya  : %.1f mA / %.2f W\n", emaCurrent, lastPowerW);
-
-    JsonDocument doc;
-    buildTelemetry(doc);
-    Serial.print("Telemetry  : ");
-    serializeJson(doc, Serial);
-    Serial.println();
+    Serial.print("MQTT       : ");
+    Serial.println(mqtt.connected() ? "published" : "offline");
+    Serial.println(buf);
     Serial.println("==================================");
   }
 }

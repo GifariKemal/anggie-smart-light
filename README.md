@@ -62,9 +62,9 @@ The two halves share a single JSON contract called `device.telemetry.v1`. The ap
 | 🧮 Signal | Exponential moving average (EMA) filtering on light and current readings |
 | 🛟 Safety | State machine: PID active, night mode, daylight off, overcurrent trip at 5 A |
 | 🌙 Schedule | Static 40 percent night mode between 22:00 and 06:00 from the RTC clock |
-| 📡 Telemetry | `device.telemetry.v1` over Serial and WiFi HTTP (`GET /telemetry`) |
+| 📡 Telemetry | `device.telemetry.v1` over Serial and MQTT (one JSON topic) |
 | 📱 App | Dark control room UI, animated lux gauge, trends, PID and safety panels |
-| 🔌 Integration | App polls the device every second and switches the badge from SIM to DEVICE |
+| 🔌 Integration | App subscribes to the MQTT topic and switches the badge from SIM to DEVICE |
 | ♿ Quality | Accessibility, reduced motion, sound and haptics, clean static analysis |
 
 ---
@@ -137,7 +137,7 @@ Full guide in [docs/APP.md](docs/APP.md).
   <img src="docs/assets/diagrams/readme-sequence.svg" alt="App to device request sequence" width="100%">
 </p>
 
-The app side lives in `lib/services/device_simulator.dart` (polling and fallback) and `lib/models/telemetry.dart` (the parser). The device side is the `WebServer` block in `Anggie.ino`. Details in [docs/INTEGRATION.md](docs/INTEGRATION.md).
+The app side lives in `lib/services/device_simulator.dart` (MQTT subscribe and fallback) and `lib/models/telemetry.dart` (the parser). The device side is the MQTT publish block in `Anggie.ino`. Details in [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ---
 
@@ -158,9 +158,9 @@ A full eleven step walkthrough with screenshots lives in [docs/flow/README.md](d
 
 | Layer | Tools |
 | :-- | :-- |
-| Firmware | Arduino C++, ESP32 core 3.x, ArduinoJson, RBDdimmer, BH1750, ACS712, RTClib |
-| App | Flutter, Dart, FiraSans and FiraMono, audioplayers, shared_preferences, http |
-| Transport | WiFi station, HTTP, mDNS, JSON |
+| Firmware | Arduino C++, ESP32 core 3.x, PubSubClient, ArduinoJson, RBDdimmer, BH1750, ACS712, RTClib |
+| App | Flutter, Dart, FiraSans and FiraMono, mqtt_client, audioplayers, shared_preferences |
+| Transport | WiFi station, MQTT (public broker, no TLS), JSON |
 | Tooling | arduino-cli, flutter, gradle, ffmpeg for sound assets |
 
 ---
@@ -170,7 +170,7 @@ A full eleven step walkthrough with screenshots lives in [docs/flow/README.md](d
 | Status | Item |
 | :-: | :-- |
 | ✅ | Firmware v0.2.0 with EMA, state machine, night mode |
-| ✅ | Telemetry contract over Serial and WiFi HTTP |
+| ✅ | Telemetry contract over Serial and MQTT (single topic) |
 | ✅ | Flutter dark dashboard with live and simulated sources |
 | ✅ | App device connection screen and auto switch |
 | ⬜ | Two way control endpoint (set target, mode, relay) |

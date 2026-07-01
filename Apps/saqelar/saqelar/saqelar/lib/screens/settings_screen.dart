@@ -13,7 +13,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _url;
+  late final TextEditingController _broker;
+  late final TextEditingController _topic;
   bool _initialized = false;
 
   @override
@@ -22,13 +23,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_initialized) return;
     _initialized = true;
     final sim = DeviceScope.of(context);
-    _url = TextEditingController(text: sim.deviceUrl ?? 'http://saqelar.local');
+    _broker = TextEditingController(
+        text: sim.broker ?? FirmwareConstants.mqttBroker);
+    _topic = TextEditingController(
+        text: sim.topic ?? FirmwareConstants.mqttTelemetryTopic);
   }
 
   @override
   void dispose() {
-    _url.dispose();
+    _broker.dispose();
+    _topic.dispose();
     super.dispose();
+  }
+
+  Widget _field(String label, TextEditingController c, String hint) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppTheme.monoLabel),
+        const SizedBox(height: 8),
+        TextField(
+          controller: c,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          style: const TextStyle(
+              fontFamily: AppTheme.fontMono, color: AppTheme.ink, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: AppTheme.faint),
+            filled: true,
+            fillColor: AppTheme.surfaceAlt,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.accent),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
   }
 
   @override
@@ -55,7 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
               children: [
-                // Status
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -74,10 +110,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             Text(
                               sim.connectionStatus,
                               style: const TextStyle(
-                                color: AppTheme.ink,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+                                  color: AppTheme.ink,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -85,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       StatusBadge(
                         label: live
                             ? 'DEVICE'
-                            : (sim.isSimulated ? 'SIM' : 'OFFLINE'),
+                            : (sim.isSimulated ? 'SIM' : 'LINKING'),
                         color: color,
                         pulse: live,
                       ),
@@ -94,32 +129,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 22),
 
-                Text('ESP32 BASE URL', style: AppTheme.monoLabel),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _url,
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  style: const TextStyle(
-                    fontFamily: AppTheme.fontMono,
-                    color: AppTheme.ink,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'http://192.168.1.50',
-                    hintStyle: const TextStyle(color: AppTheme.faint),
-                    filled: true,
-                    fillColor: AppTheme.surfaceAlt,
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppTheme.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppTheme.accent),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
+                _field('MQTT BROKER', _broker, 'broker.emqx.io'),
+                _field('TELEMETRY TOPIC', _topic,
+                    'suriota/anggie-001/telemetry'),
+
                 Row(
                   children: [
                     Expanded(
@@ -128,15 +141,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: FilledButton.icon(
                           onPressed: () {
                             Sfx.instance.success();
-                            sim.connect(_url.text);
+                            sim.connect(_broker.text, _topic.text);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Menyambung ke device…'),
+                                content: Text('Menyambung ke broker MQTT ...'),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
                           },
-                          icon: const Icon(Icons.wifi_tethering_rounded),
+                          icon: const Icon(Icons.sensors_rounded),
                           label: const Text('Sambungkan'),
                         ),
                       ),
@@ -175,20 +188,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text('CARA KERJA', style: AppTheme.monoLabel),
                       const SizedBox(height: 8),
                       const Text(
-                        'Saat URL diisi & terjangkau, app polling '
-                        'GET <url>/telemetry tiap 1 detik dan menampilkan data '
-                        'device asli (kontrak device.telemetry.v1) — tanpa '
-                        'simulasi. Kosongkan / Putuskan untuk kembali ke mode '
-                        'simulator.',
+                        'App subscribe ke telemetry topic di broker MQTT dan '
+                        'menampilkan data device asli (device.telemetry.v1) tanpa '
+                        'simulasi. Firmware publish JSON ke topic yang sama. '
+                        'Putuskan untuk kembali ke mode simulator.',
                         style: TextStyle(
-                          color: AppTheme.muted,
-                          fontSize: 12.5,
-                          height: 1.5,
-                        ),
+                            color: AppTheme.muted, fontSize: 12.5, height: 1.5),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Target firmware: ${FirmwareConstants.firmwareVersion} · '
+                        'command topic (kontrol, nanti): ${sim.commandTopic}',
+                        style: AppTheme.monoLabel.copyWith(fontSize: 10),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'target firmware ${FirmwareConstants.firmwareVersion} · '
                         '${FirmwareConstants.deviceId}',
                         style: AppTheme.monoLabel.copyWith(fontSize: 10),
                       ),

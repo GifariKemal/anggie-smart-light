@@ -10,7 +10,7 @@ class FirmwareConstants {
   static const String deviceId = 'anggie-001';
   static const String deviceName = 'Anggie Demo Lamp';
   static const String hardwareModel = 'DOIT ESP32 DEVKIT V1';
-  static const String firmwareVersion = '0.2.0';
+  static const String firmwareVersion = '0.3.0';
 
   static const double defaultTargetLux = 500; // SETPOINT
   static const double maxTargetLux = 1000; // UI tuning range ceiling
@@ -24,6 +24,13 @@ class FirmwareConstants {
   static const double currentFloorMa = 30; // firmware: mA < 30 -> 0
   static const double mainsVoltage = 220;
   static const String telemetrySchema = 'device.telemetry.v1';
+
+  // MQTT transport (public broker, no TLS). One telemetry topic to read,
+  // one command topic to write (control is a future feature).
+  static const String mqttBroker = 'broker.emqx.io';
+  static const int mqttPort = 1883;
+  static const String mqttTelemetryTopic = 'suriota/anggie-001/telemetry';
+  static const String mqttCommandTopic = 'suriota/anggie-001/command';
 
   // Initial PID tuning (Kp/Ki/Kd) from the firmware.
   static const double kp = 0.15;

@@ -3,16 +3,18 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:mqtt_client/mqtt_client.dart';
+import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/telemetry.dart';
 
-/// Drives dummy-but-physically-plausible telemetry that obeys the same control
-/// + safety rules as `Anggie.ino`. No network, no auth — pure local simulation
-/// so the UI behaves exactly like it will once wired to a real ESP32.
+/// Telemetry source. Runs a local simulation by default and, when an MQTT
+/// broker + topic are configured, subscribes and shows real device data
+/// (device.telemetry.v1). The control loop mirrors `Anggie.ino` so both
+/// halves stay in sync.
 ///
-/// ponytail: a Timer + a tiny PID loop is enough; no state-mgmt package.
+/// ponytail: one ChangeNotifier owns both the simulation and the MQTT link.
 class DeviceSimulator extends ChangeNotifier {
   DeviceSimulator() {
     _start = DateTime.now();
@@ -35,9 +37,10 @@ class DeviceSimulator extends ChangeNotifier {
     kp = p.getDouble('kp') ?? kp;
     ki = p.getDouble('ki') ?? ki;
     kd = p.getDouble('kd') ?? kd;
-    final savedUrl = p.getString('deviceUrl');
+    final b = p.getString('mqttBroker');
+    final t = p.getString('mqttTopic');
     notifyListeners();
-    if (savedUrl != null && savedUrl.isNotEmpty) connect(savedUrl);
+    if (b != null && b.isNotEmpty && t != null && t.isNotEmpty) connect(b, t);
   }
 
   void _save() {
@@ -51,52 +54,75 @@ class DeviceSimulator extends ChangeNotifier {
     p.setDouble('kd', kd);
   }
 
-  // ---- Live device link (HTTP polling of GET <url>/telemetry) ----
-  String? deviceUrl; // null => simulation mode
-  bool isLive = false; // true when last poll succeeded
+  // ---- MQTT live link ----
+  String? broker; // null => simulation mode
+  String? topic; // telemetry topic to subscribe
+  String get commandTopic =>
+      (topic ?? FirmwareConstants.mqttTelemetryTopic).contains('/telemetry')
+          ? (topic ?? '').replaceAll('/telemetry', '/command')
+          : '${topic ?? ''}/command';
+  bool isLive = false; // true while fresh telemetry is arriving
   String connectionStatus = 'Simulator';
-  Timer? _pollTimer;
+  MqttServerClient? _mqtt;
+  DateTime? _lastMsg;
 
-  bool get isSimulated => deviceUrl == null;
+  bool get isSimulated => broker == null;
 
-  /// Point the app at a real ESP32 base URL, e.g. http://192.168.1.50 or
-  /// http://saqelar.local. Persists and starts polling; data replaces the sim.
-  void connect(String url) {
-    final clean = url.trim().replaceAll(RegExp(r'/+$'), '');
-    deviceUrl = clean;
-    connectionStatus = 'Menyambung ke device…';
-    _prefs?.setString('deviceUrl', clean);
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _poll());
-    _poll();
+  /// Connect to an MQTT broker and subscribe to a telemetry topic. Device data
+  /// then replaces the simulation. Persists so it reconnects on next launch.
+  Future<void> connect(String brokerHost, String telemetryTopic) async {
+    broker = brokerHost.trim();
+    topic = telemetryTopic.trim();
+    connectionStatus = 'Menyambung ke $broker ...';
+    _prefs?.setString('mqttBroker', broker!);
+    _prefs?.setString('mqttTopic', topic!);
     notifyListeners();
-  }
 
-  void disconnect() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
-    deviceUrl = null;
-    isLive = false;
-    connectionStatus = 'Simulator';
-    _prefs?.remove('deviceUrl');
-    notifyListeners();
-  }
-
-  Future<void> _poll() async {
-    final url = deviceUrl;
-    if (url == null) return;
+    await _disposeClient();
+    final clientId =
+        'saqelar-${DateTime.now().millisecondsSinceEpoch % 100000}';
+    final c = MqttServerClient(broker!, clientId)
+      ..port = FirmwareConstants.mqttPort
+      ..keepAlivePeriod = 30
+      ..autoReconnect = true
+      ..logging(on: false)
+      ..onDisconnected = _onDisconnected
+      ..onConnected = _onConnected;
+    _mqtt = c;
     try {
-      final res = await http
-          .get(Uri.parse('$url/telemetry'))
-          .timeout(const Duration(seconds: 2));
-      if (res.statusCode != 200) {
-        _markOffline('HTTP ${res.statusCode}');
-        return;
-      }
-      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      await c.connect();
+    } catch (e) {
+      connectionStatus = 'Gagal konek broker';
+      isLive = false;
+      notifyListeners();
+      return;
+    }
+    c.subscribe(topic!, MqttQos.atMostOnce);
+    c.updates?.listen(_onMessage);
+  }
+
+  void _onConnected() {
+    connectionStatus = 'Terhubung, menunggu data ...';
+    if (topic != null) _mqtt?.subscribe(topic!, MqttQos.atMostOnce);
+    notifyListeners();
+  }
+
+  void _onDisconnected() {
+    isLive = false;
+    connectionStatus = 'Broker terputus';
+    notifyListeners();
+  }
+
+  void _onMessage(List<MqttReceivedMessage<MqttMessage>> events) {
+    final rec = events.first.payload as MqttPublishMessage;
+    final text =
+        MqttPublishPayload.bytesToStringAsString(rec.payload.message);
+    try {
+      final json = jsonDecode(text) as Map<String, dynamic>;
       final t = Telemetry.fromJson(json);
+      _lastMsg = DateTime.now();
       isLive = true;
-      connectionStatus = 'Device live · $url';
+      connectionStatus = 'Device live · $broker';
       _latest = t;
       _luxHistory.add(t.lux);
       _powerHistory.add(t.powerW);
@@ -105,33 +131,50 @@ class DeviceSimulator extends ChangeNotifier {
       if (t.isFault && _lastSafetyState != 'fault') onFaultEnter?.call();
       _lastSafetyState = t.safetyState;
       notifyListeners();
-    } catch (e) {
-      _markOffline('Tidak terhubung');
+    } catch (_) {
+      // Ignore malformed payloads; keep last good telemetry.
     }
   }
 
-  void _markOffline(String reason) {
-    if (isLive || connectionStatus != 'Device offline · $reason') {
-      isLive = false;
-      connectionStatus = 'Device offline · $reason';
-      notifyListeners();
+  /// Publish a command to the device (future control feature).
+  void publishCommand(Map<String, dynamic> command) {
+    final c = _mqtt;
+    if (c == null || c.connectionStatus?.state != MqttConnectionState.connected) {
+      return;
     }
+    final builder = MqttClientPayloadBuilder()..addString(jsonEncode(command));
+    c.publishMessage(commandTopic, MqttQos.atMostOnce, builder.payload!);
+  }
+
+  Future<void> _disposeClient() async {
+    try {
+      _mqtt?.disconnect();
+    } catch (_) {}
+    _mqtt = null;
+  }
+
+  void disconnect() {
+    _disposeClient();
+    broker = null;
+    topic = null;
+    isLive = false;
+    connectionStatus = 'Simulator';
+    _prefs?.remove('mqttBroker');
+    _prefs?.remove('mqttTopic');
+    notifyListeners();
   }
 
   // ---- Operator-settable controls (advisory; safety still wins) ----
   DeviceMode mode = DeviceMode.auto;
   double targetLux = FirmwareConstants.defaultTargetLux;
-  int manualDimmer = 60; // used only in manual mode
+  int manualDimmer = 60;
   double kp = FirmwareConstants.kp;
   double ki = FirmwareConstants.ki;
   double kd = FirmwareConstants.kd;
 
-  // Demo scenario toggles so reviewers can see standby/fault live.
-  bool simulateDaylight = false; // forces LDR above daylight threshold
-  bool simulateOvercurrent = false; // forces current past safe limit
+  bool simulateDaylight = false;
+  bool simulateOvercurrent = false;
 
-  /// Fired once when the device transitions INTO a fault (for alarm fx).
-  /// Kept out of widget build() so the alarm never double-fires on rebuild.
   void Function()? onFaultEnter;
   String _lastSafetyState = 'ok';
 
@@ -163,7 +206,7 @@ class DeviceSimulator extends ChangeNotifier {
   }
 
   void setTargetLux(double v) {
-    targetLux = v.clamp(0, 1000);
+    targetLux = v.clamp(0, FirmwareConstants.maxTargetLux);
     _save();
     notifyListeners();
   }
@@ -193,16 +236,20 @@ class DeviceSimulator extends ChangeNotifier {
   }
 
   void _tick() {
-    if (deviceUrl != null) return; // live device drives data; skip simulation
+    // Drop out of live mode if telemetry went stale (broker or device gone).
+    if (isLive &&
+        _lastMsg != null &&
+        DateTime.now().difference(_lastMsg!).inSeconds > 6) {
+      isLive = false;
+      connectionStatus = 'Device diam, kembali ke simulator';
+    }
+    if (isLive) return; // live device drives the data; skip simulation
 
-    // Ambient light: gentle drift, or forced daylight for the demo scenario.
     final drift = sin(_seq / 30.0) * 300;
     _ldr = simulateDaylight
         ? 3200 + _rng.nextInt(200)
         : (1700 + drift + _rng.nextInt(120)).round().clamp(0, 4095);
 
-    // ---- Safety / mode state machine: same priority as the firmware loop() ----
-    // Estimate current first (depends on previous dimmer) for the OC check.
     final estCurrent = simulateOvercurrent
         ? 5200 + _rng.nextDouble() * 200
         : _dimmer / FirmwareConstants.dimmerMaxPct * 700;
@@ -238,7 +285,6 @@ class DeviceSimulator extends ChangeNotifier {
       relay = true;
     }
 
-    // ---- Dimmer drive ----
     if (!relay) {
       _dimmer = 0;
       _integral = 0;
@@ -251,10 +297,8 @@ class DeviceSimulator extends ChangeNotifier {
       _dimmer = manualDimmer.toDouble();
       _pidOutput = 0;
     } else {
-      // Auto: discrete PID nudging dimmer toward target lux (mirrors firmware).
       var error = targetLux - _lux;
       if (_ldr < FirmwareConstants.ldrFeedforwardRaw) {
-        // Dynamic feed-forward (mirrors firmware map(0..1000 -> 100..0)).
         error += (FirmwareConstants.ldrFeedforwardRaw - _ldr) /
             FirmwareConstants.ldrFeedforwardRaw *
             100;
@@ -269,19 +313,16 @@ class DeviceSimulator extends ChangeNotifier {
       _lastError = error;
     }
 
-    // ---- Plant: lux responds to dimmer + ambient, with a little noise ----
     final ambientLux = (_ldr / 4095) * 80;
     final driven = _dimmer / FirmwareConstants.dimmerMaxPct * 620;
     final targetPhysical = relay ? ambientLux + driven : ambientLux;
     _lux += (targetPhysical - _lux) * 0.35 + (_rng.nextDouble() - 0.5) * 6;
     if (_lux < 0) _lux = 0;
 
-    // Overcurrent demo reports the offending spike even as the relay trips
-    // (mirrors firmware reading the high mA on the cycle it cuts power).
     var currentMa = simulateOvercurrent
         ? estCurrent
         : (relay ? estCurrent + (_rng.nextDouble() - 0.5) * 10 : 0.0);
-    if (currentMa < FirmwareConstants.currentFloorMa) currentMa = 0; // fw floor
+    if (currentMa < FirmwareConstants.currentFloorMa) currentMa = 0;
     final powerW = currentMa / 1000.0 * FirmwareConstants.mainsVoltage;
 
     _luxHistory.add(_lux);
@@ -318,7 +359,7 @@ class DeviceSimulator extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
-    _pollTimer?.cancel();
+    _disposeClient();
     super.dispose();
   }
 }

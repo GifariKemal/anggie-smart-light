@@ -45,8 +45,8 @@ A high level view of how Anggie is put together, from the silicon to the screen.
 | Sense | BH1750, LDR, ACS712, DS3231 | Measure lux, ambient, current, time |
 | Think | EMA filter, PID, state machine | Smooth, control, and protect |
 | Act | Relay, AC dimmer | Switch and dim the lamp |
-| Serve | Serial, WiFi HTTP | Publish telemetry |
-| Source | DeviceSimulator | Poll the device or simulate locally |
+| Serve | Serial, MQTT publish | Publish telemetry to the topic |
+| Source | DeviceSimulator | Subscribe the MQTT topic or simulate locally |
 | Model | Telemetry, FirmwareConstants | Parse and hold the contract |
 | UI | Screens and HUD widgets | Present and interact |
 

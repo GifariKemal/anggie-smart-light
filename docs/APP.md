@@ -68,7 +68,7 @@ A full screenshot tour is in [flow/README.md](flow/README.md).
 | :-- | :-- |
 | `lib/app/app_theme.dart` | Theme tokens, radius scale, motion helper |
 | `lib/models/telemetry.dart` | Contract model, `FirmwareConstants`, JSON |
-| `lib/services/device_simulator.dart` | Telemetry source, simulation, HTTP polling |
+| `lib/services/device_simulator.dart` | Telemetry source, simulation, MQTT subscribe |
 | `lib/services/device_scope.dart` | Provider via InheritedNotifier |
 | `lib/services/sfx.dart` | Sound effects and haptics |
 | `lib/widgets/hud_widgets.dart` | Gauge, sparkline, metric tile, grid background |
@@ -84,7 +84,7 @@ The app has one source object that can run in two modes:
   <img src="assets/diagrams/app-source.svg" alt="Live device or simulator source" width="100%">
 </p>
 
-Set the device URL in the Settings screen. When the poll succeeds the dashboard shows real values and the simulation pauses. When it fails the app keeps working in simulation. The URL is saved with `shared_preferences`.
+Set the broker and topic in the Settings screen. When telemetry arrives the dashboard shows real values and the simulation pauses. If the stream goes quiet for six seconds the app falls back to simulation. Broker and topic are saved with `shared_preferences`.
 
 ---
 
@@ -99,7 +99,7 @@ flutter run                 # debug on a connected device
 flutter build apk --release # release build
 ```
 
-> 💡 The app needs cleartext HTTP for the local device link. This is already enabled in the Android manifest for the LAN use case.
+> 💡 The app talks to the broker over a plain MQTT TCP socket. Only the INTERNET permission is needed, already declared in the Android manifest.
 
 ---
 

@@ -19,7 +19,7 @@ How the ESP32 device and the Saqelar app connect into one working system over Wi
 | Section | Content |
 | :-- | :-- |
 | [Data flow](#-data-flow) | The end to end picture |
-| [Endpoints](#-endpoints) | Device HTTP API |
+| [Topics](#-topics) | MQTT topics and payload |
 | [Sequence](#-sequence) | Request and response timing |
 | [Connect steps](#-connect-steps) | Bring it online |
 | [Requirements](#-requirements) | What must be true |
@@ -34,23 +34,24 @@ How the ESP32 device and the Saqelar app connect into one working system over Wi
   <img src="assets/dataflow.svg" alt="Data flow from hardware to app" width="100%">
 </p>
 
-The device produces telemetry. The app consumes it. There is one shared contract, so when the device is reachable the app shows real data and stops simulating.
+The device publishes telemetry to a broker. The app subscribes and consumes it. There is one shared contract, so when telemetry arrives the app shows real data and stops simulating.
 
 ---
 
-## 🧪 Endpoints
+## 🧪 Topics
 
-| Method | Path | Returns |
+Public broker `broker.emqx.io` on plain TCP port `1883` (no TLS).
+
+| Topic | Direction | Payload |
 | :-- | :-- | :-- |
-| GET | `/telemetry` | A `device.telemetry.v1` JSON snapshot |
-| GET | `/health` | Status, device id, firmware, uptime |
+| `suriota/anggie-001/telemetry` | device publishes, app reads | `device.telemetry.v1` JSON, once per second |
+| `suriota/anggie-001/command` | app publishes, device reads | JSON command (future control feature) |
 
-Base URL is `http://<device-ip>` or `http://saqelar.local`. The server listens on port 80. CORS is open for convenience on a trusted LAN.
+All device data is carried in the single telemetry topic. Control adds a second topic later, so read and write stay cleanly separated.
 
 ```bash
-# quick check from any machine on the same network
-curl http://saqelar.local/health
-curl http://saqelar.local/telemetry
+# watch live telemetry from any machine with mosquitto tools
+mosquitto_sub -h broker.emqx.io -p 1883 -t "suriota/anggie-001/telemetry" -v
 ```
 
 ---
@@ -65,13 +66,13 @@ curl http://saqelar.local/telemetry
 
 ## ✅ Connect steps
 
-1. 🔧 In `Anggie.ino`, set `WIFI_SSID` and `WIFI_PASS`, then flash the ESP32.
-2. 🖥️ Open Serial Monitor at 115200 and read the printed IP, for example `192.168.1.50`.
+1. 🔧 In `Anggie.ino`, set `WIFI_SSID` and `WIFI_PASS` (broker and topics have defaults), then flash the ESP32.
+2. 🖥️ Open Serial Monitor at 115200 and confirm `MQTT connected` plus a published telemetry line.
 3. 📱 In the app, open Settings from the dashboard gear icon.
-4. ⌨️ Enter `http://192.168.1.50` or `http://saqelar.local`, then tap Sambungkan.
+4. ⌨️ Keep the defaults `broker.emqx.io` and `suriota/anggie-001/telemetry`, or match your own, then tap Sambungkan.
 5. 🟢 The header badge changes from SIM to DEVICE and the dashboard shows real data.
 
-To go back to the simulator, tap Putuskan or clear the URL.
+To go back to the simulator, tap Putuskan.
 
 ---
 
@@ -79,10 +80,10 @@ To go back to the simulator, tap Putuskan or clear the URL.
 
 | Requirement | Why |
 | :-- | :-- |
-| Same WiFi network | The app reaches the device by local IP |
-| 2.4 GHz WiFi | The ESP32 radio does not use 5 GHz |
-| WiFi credentials set | The device needs to join before serving HTTP |
-| Cleartext HTTP allowed | The LAN link is plain HTTP, already enabled in the app |
+| Internet access on both sides | Device and phone reach the public broker, they do not need the same LAN |
+| 2.4 GHz WiFi for the ESP32 | The ESP32 radio does not use 5 GHz |
+| WiFi credentials set | The device needs to join a network before publishing |
+| Same broker and topic | The app must subscribe to the exact topic the device publishes |
 
 ---
 
@@ -90,16 +91,16 @@ To go back to the simulator, tap Putuskan or clear the URL.
 
 | Symptom | Likely cause | Fix |
 | :-- | :-- | :-- |
-| Badge stays SIM | URL empty or wrong | Re enter the device URL in Settings |
-| Badge shows OFFLINE | Device not reachable | Check WiFi, IP, and that both are on one network |
-| `saqelar.local` fails | mDNS not resolving | Use the numeric IP from Serial Monitor |
-| Values look frozen | Device rebooted | Wait for reconnect, the app retries each second |
+| Badge stays SIM | Broker or topic empty or wrong | Re enter broker and topic in Settings |
+| No data after connect | App and device on different topics | Make both use the exact same topic string |
+| Device never publishes | WiFi not joined | Check `WIFI_SSID` and `WIFI_PASS`, watch Serial Monitor |
+| Values go stale then SIM | Device or broker dropped | App auto falls back after 6 seconds, then resumes on reconnect |
 
 ---
 
 ## 🔁 Two way control (next)
 
-Today the link is one direction, device to app, for monitoring. The planned upgrade adds a command endpoint so the control panel can change the device:
+Today the link is one direction, device to app, for monitoring. The planned upgrade uses the command topic so the control panel can change the device:
 
 <p align="center">
   <img src="assets/diagrams/int-control.svg" alt="Two way control plan" width="100%">
