@@ -64,6 +64,13 @@ double Kp = 0.15, Ki = 0.05, Kd = 0.01;
 double error = 0, lastError = 0, integral = 0, derivative = 0, pidOutput = 0;
 int    currentBrightness = 0;
 
+// Runtime-writable via the MQTT command topic. The safety state machine still
+// overrides these (overcurrent always trips the relay).
+double targetLux    = SETPOINT; // PID setpoint
+int    manualDimmer = 60;       // dimmer % used in manual mode
+enum   OpMode { OP_AUTO, OP_MANUAL, OP_OFF };
+OpMode opMode = OP_AUTO;
+
 // Exponential moving average (DSP smoothing).
 float       emaLDR = 0, emaCurrent = 0;
 const float ALPHA_LDR = 0.2f, ALPHA_CURRENT = 0.1f;
@@ -76,11 +83,13 @@ unsigned long lastPidTime = 0, lastPrintTime = 0, lastMqttAttempt = 0;
 // Telemetry contract (device.telemetry.v1)
 // ---------------------------------------------------------------------------
 const char DEVICE_ID[]        = "anggie-001";
-const char FIRMWARE_VERSION[] = "0.4.0";
+const char FIRMWARE_VERSION[] = "0.5.0";
 const char TELEMETRY_SCHEMA[] = "device.telemetry.v1";
 uint32_t   telemetrySeq       = 0;
 
-enum SystemState { SAFE_PID_ACTIVE, NIGHT_MODE, DAYLIGHT_OFF, OVERCURRENT_TRIP };
+enum SystemState {
+  SAFE_PID_ACTIVE, NIGHT_MODE, DAYLIGHT_OFF, OVERCURRENT_TRIP, MODE_OFF, MANUAL_MODE
+};
 SystemState currentState = SAFE_PID_ACTIVE;
 
 float  lastLux = 0, lastPowerW = 0;
@@ -100,13 +109,21 @@ PubSubClient mqtt(espClient);
 // Contract mapping helpers
 // ---------------------------------------------------------------------------
 const char* modeForState(SystemState s) {
-  return (s == NIGHT_MODE) ? "night" : "auto";
+  if (s == NIGHT_MODE) return "night";
+  if (s == MANUAL_MODE) return "manual";
+  if (s == MODE_OFF) return "off";
+  switch (opMode) { // auto / daylight / overcurrent reflect the requested mode
+    case OP_MANUAL: return "manual";
+    case OP_OFF:    return "off";
+    default:        return "auto";
+  }
 }
 
 const char* safetyForState(SystemState s) {
   switch (s) {
     case OVERCURRENT_TRIP: return "fault";
     case DAYLIGHT_OFF:     return "standby";
+    case MODE_OFF:         return "standby";
     default:               return "ok";
   }
 }
@@ -146,7 +163,7 @@ void buildTelemetry(JsonDocument& doc) {
   }
 
   doc["lux"]       = lastLux;
-  doc["targetLux"] = SETPOINT;
+  doc["targetLux"] = targetLux;
   doc["ldrRaw"]    = (int)emaLDR;
   doc["currentMa"] = emaCurrent;
   doc["powerW"]    = lastPowerW;
@@ -180,7 +197,23 @@ void onCommand(char* topic, byte* payload, unsigned int length) {
   Serial.print(": ");
   serializeJson(doc, Serial);
   Serial.println();
-  // TODO(control): apply doc["targetLux"], doc["mode"], doc["relay"] safely.
+
+  // Apply commands. The safety state machine in loop() still has final say.
+  if (!doc["mode"].isNull()) {
+    String m = doc["mode"].as<String>();
+    if (m == "off") opMode = OP_OFF;
+    else if (m == "manual") opMode = OP_MANUAL;
+    else opMode = OP_AUTO;
+  }
+  if (!doc["targetLux"].isNull()) {
+    targetLux = constrain(doc["targetLux"].as<double>(), 0.0, 1000.0);
+  }
+  if (!doc["dimmer"].isNull()) {
+    manualDimmer = constrain(doc["dimmer"].as<int>(), 0, DIMMER_CEILING);
+  }
+  if (!doc["kp"].isNull()) Kp = doc["kp"].as<double>();
+  if (!doc["ki"].isNull()) Ki = doc["ki"].as<double>();
+  if (!doc["kd"].isNull()) Kd = doc["kd"].as<double>();
 }
 
 // Non-blocking reconnect so the control + safety loop never stalls.
@@ -294,9 +327,14 @@ void loop() {
   lastLux = lightMeter.readLightLevel();
   lastPowerW = (emaCurrent / 1000.0f) * 220.0f;
 
-  // 2. Safety / mode state machine.
+  // 2. Safety / mode state machine. Overcurrent always wins; then the operator
+  //    mode (off / manual) requested over MQTT; then the automatic behaviors.
   if (emaCurrent > MAX_SAFE_CURRENT) {
     currentState = OVERCURRENT_TRIP;
+  } else if (opMode == OP_OFF) {
+    currentState = MODE_OFF;
+  } else if (opMode == OP_MANUAL) {
+    currentState = MANUAL_MODE;
   } else if (now.hour() >= NIGHT_START_HOUR || now.hour() < NIGHT_END_HOUR) {
     currentState = NIGHT_MODE;
   } else if (emaLDR > LDR_DAYLIGHT) {
@@ -306,7 +344,8 @@ void loop() {
   }
 
   // 3. Drive hardware.
-  if (currentState == OVERCURRENT_TRIP || currentState == DAYLIGHT_OFF) {
+  if (currentState == OVERCURRENT_TRIP || currentState == DAYLIGHT_OFF ||
+      currentState == MODE_OFF) {
     dimmer.setPower(0);
     digitalWrite(RELAY_PIN, RELAY_OFF);
     currentBrightness = 0;
@@ -320,12 +359,20 @@ void loop() {
     integral = 0;
     lastError = 0;
     pidOutput = 0;
+  } else if (currentState == MANUAL_MODE) {
+    digitalWrite(RELAY_PIN, RELAY_ON);
+    const int d = constrain(manualDimmer, 0, DIMMER_CEILING);
+    dimmer.setPower(d);
+    currentBrightness = d;
+    integral = 0;
+    lastError = 0;
+    pidOutput = 0;
   } else { // SAFE_PID_ACTIVE
     if (currentMillis - lastPidTime >= PID_INTERVAL) {
       lastPidTime = currentMillis;
       digitalWrite(RELAY_PIN, RELAY_ON);
 
-      error = SETPOINT - lastLux;
+      error = targetLux - lastLux;
       if (emaLDR < 1000) {
         error += (float)map((long)emaLDR, 0, 1000, 100, 0); // feed-forward
       }
@@ -368,10 +415,13 @@ void loop() {
     Serial.printf("Waktu      : %02d:%02d:%02d\n", now.hour(), now.minute(), now.second());
     Serial.print("Status     : ");
     switch (currentState) {
-      case SAFE_PID_ACTIVE:  Serial.println("PID AKTIF (target 500 lux)"); break;
+      case SAFE_PID_ACTIVE:
+        Serial.printf("PID AKTIF (target %.0f lux)\n", targetLux); break;
       case NIGHT_MODE:       Serial.println("MALAM (statis 40%)"); break;
       case DAYLIGHT_OFF:     Serial.println("SIANG (padam)"); break;
       case OVERCURRENT_TRIP: Serial.println("OVERCURRENT (>5A) - RELAY PUTUS"); break;
+      case MODE_OFF:         Serial.println("OFF (perintah operator)"); break;
+      case MANUAL_MODE:      Serial.println("MANUAL (dimmer operator)"); break;
     }
     Serial.printf("Lux        : %.0f  | LDR(EMA): %.0f\n", lastLux, emaLDR);
     Serial.printf("Dimmer     : %d%%\n", currentBrightness);

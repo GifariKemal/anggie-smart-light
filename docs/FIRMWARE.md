@@ -23,6 +23,7 @@ ESP32 firmware (`Anggie.ino`) for a closed loop smart light. It keeps a work are
 | [Parameters](#-parameters) | Tunable constants |
 | [Control logic](#-control-logic) | EMA, PID, and state machine |
 | [Telemetry](#-telemetry-contract) | The shared JSON contract |
+| [Commands](#-commands-two-way-control) | Two way control fields |
 | [Build and flash](#-build-and-flash) | arduino-cli commands |
 | [WiFi setup (captive portal)](#-wifi-setup-captive-portal) | On device WiFi and MQTT config |
 | [Serial output](#-serial-output) | What you see on the monitor |
@@ -133,6 +134,25 @@ Sample payload:
   "firmware": "0.2.0"
 }
 ```
+
+---
+
+## 🎚️ Commands (two way control)
+
+The firmware subscribes to `suriota/anggie-001/command` and applies incoming JSON. Send any subset of the fields below. The safety state machine still overrides everything, so overcurrent trips the relay regardless of any command.
+
+| Field | Type | Effect |
+| :-- | :-- | :-- |
+| `mode` | string | `auto`, `manual`, or `off` |
+| `targetLux` | number | PID setpoint, clamped 0 to 1000 |
+| `dimmer` | int | Manual dimmer percent, clamped 0 to 80 (manual mode) |
+| `kp` / `ki` / `kd` | number | Live PID tuning |
+
+```json
+{ "mode": "manual", "dimmer": 55 }
+```
+
+The app publishes these automatically from the Control panel while connected, so you normally never send them by hand.
 
 ---
 

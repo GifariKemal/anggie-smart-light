@@ -145,16 +145,23 @@ class ControlScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppTheme.border),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.shield_moon_rounded,
-                      color: AppTheme.faint, size: 16),
-                  SizedBox(width: 9),
+                  Icon(
+                    sim.isLive
+                        ? Icons.sensors_rounded
+                        : Icons.shield_moon_rounded,
+                    color: sim.isLive ? AppTheme.accent : AppTheme.faint,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      'Commands are advisory. On-device safety logic keeps final '
-                      'authority over the relay and dimmer.',
-                      style: TextStyle(color: AppTheme.faint, fontSize: 12, height: 1.4),
+                      sim.isLive
+                          ? 'Terhubung ke device: perubahan dikirim live ke command topic. Safety on-device tetap berkuasa.'
+                          : 'Mode simulator. Sambungkan device di Settings agar kontrol dikirim ke perangkat.',
+                      style: const TextStyle(
+                          color: AppTheme.faint, fontSize: 12, height: 1.4),
                     ),
                   ),
                 ],

@@ -217,18 +217,21 @@ class DeviceSimulator extends ChangeNotifier {
   void setMode(DeviceMode m) {
     mode = m;
     _save();
+    if (isLive) publishCommand({'mode': m.wire});
     notifyListeners();
   }
 
   void setTargetLux(double v) {
     targetLux = v.clamp(0, FirmwareConstants.maxTargetLux);
     _save();
+    if (isLive) publishCommand({'targetLux': targetLux});
     notifyListeners();
   }
 
   void setManualDimmer(int v) {
     manualDimmer = v.clamp(0, FirmwareConstants.dimmerMaxPct);
     _save();
+    if (isLive) publishCommand({'dimmer': manualDimmer});
     notifyListeners();
   }
 
@@ -237,6 +240,7 @@ class DeviceSimulator extends ChangeNotifier {
     this.ki = ki ?? this.ki;
     this.kd = kd ?? this.kd;
     _save();
+    if (isLive) publishCommand({'kp': this.kp, 'ki': this.ki, 'kd': this.kd});
     notifyListeners();
   }
 

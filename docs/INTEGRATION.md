@@ -24,7 +24,7 @@ How the ESP32 device and the Saqelar app connect into one working system over Wi
 | [Connect steps](#-connect-steps) | Bring it online |
 | [Requirements](#-requirements) | What must be true |
 | [Troubleshooting](#-troubleshooting) | Common issues |
-| [Two way control](#-two-way-control-next) | The next milestone |
+| [Two way control](#-two-way-control) | Command topic and payloads |
 
 ---
 
@@ -97,15 +97,30 @@ To force the simulator, tap Putuskan. The app also falls back on its own after s
 
 ---
 
-## 🔁 Two way control (next)
+## 🔁 Two way control
 
-Today the link is one direction, device to app, for monitoring. The planned upgrade uses the command topic so the control panel can change the device:
+Control is live. When the app is connected to a device, the Control panel publishes commands to the command topic, and the firmware applies them. The on device safety state machine always keeps final authority, so overcurrent still trips the relay no matter what is sent.
 
 <p align="center">
-  <img src="assets/diagrams/int-control.svg" alt="Two way control plan" width="100%">
+  <img src="assets/diagrams/int-control.svg" alt="Two way control flow" width="100%">
 </p>
 
-Until then the app control panel is advisory and drives the simulator only. Safety logic on the device always keeps final authority over the relay and dimmer.
+Command topic: `suriota/anggie-001/command`. Send any subset of these fields as JSON:
+
+| Field | Type | Effect |
+| :-- | :-- | :-- |
+| `mode` | string | `auto`, `manual`, or `off` |
+| `targetLux` | number | PID setpoint, clamped 0 to 1000 |
+| `dimmer` | int | Manual dimmer percent, clamped 0 to 80, used in manual mode |
+| `kp` / `ki` / `kd` | number | Live PID tuning |
+
+```bash
+# from any machine, set the device to manual at 55 percent
+mosquitto_pub -h broker.emqx.io -p 1883 -t "suriota/anggie-001/command" \
+  -m '{"mode":"manual","dimmer":55}'
+```
+
+In the app you never touch this directly. Moving a slider or picking a mode in the Control panel publishes the matching command automatically while connected, and drives the simulator when offline.
 
 ---
 
