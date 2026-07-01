@@ -10,7 +10,7 @@ class FirmwareConstants {
   static const String deviceId = 'anggie-001';
   static const String deviceName = 'Anggie Demo Lamp';
   static const String hardwareModel = 'DOIT ESP32 DEVKIT V1';
-  static const String firmwareVersion = '0.3.0';
+  static const String firmwareVersion = '0.4.0';
 
   static const double defaultTargetLux = 500; // SETPOINT
   static const double maxTargetLux = 1000; // UI tuning range ceiling

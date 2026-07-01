@@ -24,7 +24,7 @@ ESP32 firmware (`Anggie.ino`) for a closed loop smart light. It keeps a work are
 | [Control logic](#-control-logic) | EMA, PID, and state machine |
 | [Telemetry](#-telemetry-contract) | The shared JSON contract |
 | [Build and flash](#-build-and-flash) | arduino-cli commands |
-| [WiFi and MQTT setup](#-wifi-and-mqtt-setup) | Live link configuration |
+| [WiFi setup (captive portal)](#-wifi-setup-captive-portal) | On device WiFi and MQTT config |
 | [Serial output](#-serial-output) | What you see on the monitor |
 | [Safety](#-safety-notes) | High voltage warning |
 
@@ -146,27 +146,46 @@ arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 --warnings all .
 arduino-cli upload --fqbn esp32:esp32:esp32doit-devkit-v1 -p COM5 .
 ```
 
-Required libraries: `PubSubClient`, `ArduinoJson`, `RBDdimmer`, `ACS712`, `BH1750`, `RTClib`, `Adafruit BusIO`. WiFi ships with the ESP32 core.
+Required libraries: `WiFiManager`, `PubSubClient`, `ArduinoJson`, `RBDdimmer`, `ACS712`, `BH1750`, `RTClib`, `Adafruit BusIO`. WiFi, WebServer, and DNSServer ship with the ESP32 core.
 
 > ⚠️ RBDdimmer from RobotDyn may need a local patch for ESP32 core 3.x. Keep the patched copy in your Arduino libraries folder.
 
 ---
 
-## 🌐 WiFi and MQTT setup
+## 🌐 WiFi setup (captive portal)
 
-Edit the top of `Anggie.ino`:
+WiFi is configured on the device, no credentials are hardcoded and no reflashing is needed to change networks. On first boot, or whenever saved WiFi fails, the firmware opens its own access point and shows a setup page.
+
+<p align="center">
+  <img src="assets/diagrams/fw-wifi-setup.svg" alt="Captive portal WiFi setup flow" width="100%">
+</p>
+
+### How to connect the device to WiFi 📶
+
+1. 🔌 Power on the ESP32. If it has no saved WiFi, it starts an access point named **`Anggie-Setup`**.
+2. 📱 On your phone, open WiFi settings and join **`Anggie-Setup`** (password **`anggie1234`**).
+3. 🌐 A captive portal opens automatically. If not, open a browser to `http://192.168.4.1`.
+4. 📝 Tap **Configure WiFi**, pick your 2.4 GHz network, type the password, and Save.
+5. ✅ The device reboots, joins your WiFi, then connects to the MQTT broker and starts publishing telemetry.
+
+The portal stays open for `PORTAL_TIMEOUT` seconds (default 180). If it times out with no setup, the device runs offline and Serial telemetry still works.
+
+### Reset saved WiFi 🔁
+
+To move the device to a different network, either wipe the saved WiFi by uncommenting `wm.resetSettings();` in `startNetwork()` for one flash, or add a physical reset button later. After a reset the portal appears again on the next boot.
+
+### MQTT settings
+
+These are constants near the top of `Anggie.ino` (no portal needed):
 
 ```cpp
-const char* WIFI_SSID = "your-2g-ssid";
-const char* WIFI_PASS = "your-password";
-
 const char* MQTT_BROKER     = "broker.emqx.io";
 const int   MQTT_PORT       = 1883;                          // plain TCP, no TLS
 const char* TOPIC_TELEMETRY = "suriota/anggie-001/telemetry"; // device publishes
 const char* TOPIC_COMMAND   = "suriota/anggie-001/command";   // device subscribes (future control)
 ```
 
-Leave WiFi blank to run offline, where Serial telemetry still works. On connect, the firmware publishes a `device.telemetry.v1` JSON message to the telemetry topic once per second and subscribes to the command topic. Reconnect is non blocking, so the control and safety loop never stalls even if the broker is down.
+Once online the firmware publishes a `device.telemetry.v1` JSON message to the telemetry topic once per second and subscribes to the command topic. MQTT reconnect is non blocking, so the control and safety loop never stalls even if the broker is down.
 
 ---
 

@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/GifariKemal/anggie-smart-light/releases/latest/download/saqelar-v0.3.1.apk">
-    <img src="https://img.shields.io/badge/%E2%AC%87%20Download-APK%20v0.3.1-22C55E?style=for-the-badge&logo=android&logoColor=white" alt="Download APK">
+  <a href="https://github.com/GifariKemal/anggie-smart-light/releases/latest/download/saqelar-v0.4.0.apk">
+    <img src="https://img.shields.io/badge/%E2%AC%87%20Download-APK%20v0.4.0-22C55E?style=for-the-badge&logo=android&logoColor=white" alt="Download APK">
   </a>
   <a href="https://github.com/GifariKemal/anggie-smart-light/releases/latest">
     <img src="https://img.shields.io/github/v/release/GifariKemal/anggie-smart-light?style=for-the-badge&color=38BDF8&label=release" alt="latest release">
@@ -116,7 +116,7 @@ arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 --warnings all .
 arduino-cli upload  --fqbn esp32:esp32:esp32doit-devkit-v1 -p COM5 .
 ```
 
-Set `WIFI_SSID` and `WIFI_PASS` near the top of `Anggie.ino` before flashing if you want the live HTTP link. Full guide in [docs/FIRMWARE.md](docs/FIRMWARE.md).
+No WiFi credentials in code. On first boot the device opens a `Anggie-Setup` captive portal so you pick your WiFi from a phone, then it connects to the MQTT broker. Full guide in [docs/FIRMWARE.md](docs/FIRMWARE.md).
 
 ### App 📱
 

@@ -17,6 +17,7 @@
 #include <RTClib.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 #include <PubSubClient.h>
 
 // ---------------------------------------------------------------------------
@@ -32,10 +33,13 @@
 #define RELAY_OFF LOW
 
 // ---------------------------------------------------------------------------
-// WiFi - fill these in before flashing real hardware.
+// WiFi - configured on the device via a captive portal (WiFiManager).
+// No credentials are hardcoded. On first boot, or when saved WiFi fails, the
+// device opens an access point; connect to it and pick your WiFi in a web page.
 // ---------------------------------------------------------------------------
-const char* WIFI_SSID = "";   // TODO: your 2.4GHz SSID
-const char* WIFI_PASS = "";   // TODO: your WiFi password
+const char* AP_NAME        = "Anggie-Setup"; // captive portal SSID
+const char* AP_PASS        = "anggie1234";   // captive portal password (>=8 chars)
+const int   PORTAL_TIMEOUT = 180;            // seconds the portal stays open
 
 // ---------------------------------------------------------------------------
 // MQTT - public broker, no TLS. Keep topics unique on a shared broker.
@@ -72,7 +76,7 @@ unsigned long lastPidTime = 0, lastPrintTime = 0, lastMqttAttempt = 0;
 // Telemetry contract (device.telemetry.v1)
 // ---------------------------------------------------------------------------
 const char DEVICE_ID[]        = "anggie-001";
-const char FIRMWARE_VERSION[] = "0.3.0";
+const char FIRMWARE_VERSION[] = "0.4.0";
 const char TELEMETRY_SCHEMA[] = "device.telemetry.v1";
 uint32_t   telemetrySeq       = 0;
 
@@ -197,24 +201,21 @@ void mqttEnsure() {
 }
 
 void startNetwork() {
-  if (strlen(WIFI_SSID) == 0) {
-    Serial.println("WiFi: SSID kosong -> jalan offline (Serial only).");
-    return;
-  }
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("WiFi: menyambung");
-  const unsigned long deadline = millis() + 12000;
-  while (WiFi.status() != WL_CONNECTED && millis() < deadline) {
-    delay(300);
-    Serial.print('.');
-  }
-  Serial.println();
+  WiFiManager wm;
+  wm.setConfigPortalTimeout(PORTAL_TIMEOUT);
+  // wm.resetSettings(); // uncomment once, flash, boot to wipe saved WiFi, then re-comment
 
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi: gagal -> jalan offline (Serial only).");
+  Serial.print("WiFi: cek kredensial tersimpan / buka portal '");
+  Serial.print(AP_NAME);
+  Serial.println("' bila perlu...");
+
+  // Tries saved WiFi first; if none/failed, opens the captive portal AP.
+  const bool ok = wm.autoConnect(AP_NAME, AP_PASS);
+  if (!ok) {
+    Serial.println("WiFi: belum dikonfigurasi/timeout -> jalan offline (Serial only).");
     return;
   }
+
   Serial.print("WiFi: terhubung, IP = ");
   Serial.println(WiFi.localIP());
 
@@ -268,9 +269,11 @@ void setup() {
   emaLDR = analogRead(LDR_PIN);
   emaCurrent = 0;
 
-  digitalWrite(RELAY_PIN, RELAY_ON);
-
+  // May block while the captive portal is open; keep the relay OFF until the
+  // network step is done so the lamp is never left uncontrolled during setup.
   startNetwork();
+
+  digitalWrite(RELAY_PIN, RELAY_ON);
 }
 
 // ---------------------------------------------------------------------------
