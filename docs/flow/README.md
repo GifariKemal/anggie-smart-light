@@ -12,10 +12,9 @@
 
 A full walkthrough of the Saqelar app captured on a Xiaomi 15 running the release build. The app uses the local simulator here, so every screen is reproducible without hardware.
 
-```mermaid
-flowchart LR
-  S["Splash"] --> O["Onboarding x3"] --> D["Dashboard"] --> C["Control"] --> X["Demo scenarios"] --> F["Fault state"]
-```
+<p align="center">
+  <img src="../assets/diagrams/flow-steps.svg" alt="Screen flow" width="100%">
+</p>
 
 ---
 

@@ -75,32 +75,15 @@ The two halves share a single JSON contract called `device.telemetry.v1`. The ap
   <img src="docs/assets/dataflow.svg" alt="Data flow from hardware to app" width="100%">
 </p>
 
-```mermaid
-flowchart LR
-  subgraph Device["ESP32 DOIT DEVKIT V1"]
-    S["Sensors<br/>BH1750 / LDR / ACS712 / RTC"] --> C["Control loop<br/>EMA + PID + state machine"]
-    C --> A["Actuators<br/>relay + AC dimmer"]
-    C --> T["Telemetry builder<br/>device.telemetry.v1"]
-    T --> H["WiFi HTTP server :80"]
-  end
-  H -->|"GET /telemetry (JSON)"| APP["Saqelar App<br/>Flutter dark dashboard"]
-  APP -->|"poll every 1s"| H
-  C -. fallback when offline .-> SIM["Local simulator"]
-  SIM -. drives .-> APP
-```
+<p align="center">
+  <img src="docs/assets/diagrams/readme-architecture.svg" alt="System architecture and data flow" width="100%">
+</p>
 
 The safety state machine inside the firmware decides everything downstream:
 
-```mermaid
-stateDiagram-v2
-  [*] --> SAFE_PID_ACTIVE
-  SAFE_PID_ACTIVE --> OVERCURRENT_TRIP: current over 5 A
-  SAFE_PID_ACTIVE --> NIGHT_MODE: hour in 22 to 06
-  SAFE_PID_ACTIVE --> DAYLIGHT_OFF: filtered LDR over 3000
-  NIGHT_MODE --> SAFE_PID_ACTIVE: morning
-  DAYLIGHT_OFF --> SAFE_PID_ACTIVE: ambient drops
-  OVERCURRENT_TRIP --> SAFE_PID_ACTIVE: current safe again
-```
+<p align="center">
+  <img src="docs/assets/diagrams/readme-states.svg" alt="Safety state machine" width="100%">
+</p>
 
 ---
 
@@ -150,20 +133,9 @@ Full guide in [docs/APP.md](docs/APP.md).
 
 ## 🔗 How hardware talks to the app
 
-```mermaid
-sequenceDiagram
-  participant H as ESP32 (WiFi HTTP)
-  participant A as Saqelar App
-  Note over H,A: Both join the same WiFi network
-  A->>H: GET http://device-ip/telemetry
-  H-->>A: 200 device.telemetry.v1 (JSON)
-  A->>A: Telemetry.fromJson -> update dashboard
-  loop every 1 second
-    A->>H: GET /telemetry
-    H-->>A: latest snapshot
-  end
-  Note over A: badge switches SIM to DEVICE
-```
+<p align="center">
+  <img src="docs/assets/diagrams/readme-sequence.svg" alt="App to device request sequence" width="100%">
+</p>
 
 The app side lives in `lib/services/device_simulator.dart` (polling and fallback) and `lib/models/telemetry.dart` (the parser). The device side is the `WebServer` block in `Anggie.ino`. Details in [docs/INTEGRATION.md](docs/INTEGRATION.md).
 

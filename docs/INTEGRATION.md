@@ -57,25 +57,9 @@ curl http://saqelar.local/telemetry
 
 ## ⏱️ Sequence
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant A as Saqelar App
-  participant D as ESP32 device
-  Note over A,D: Same WiFi network
-  A->>D: GET /telemetry
-  D-->>A: 200 JSON (device.telemetry.v1)
-  A->>A: Telemetry.fromJson
-  A->>A: update gauge, trends, safety
-  loop every 1 second
-    A->>D: GET /telemetry
-    alt reachable
-      D-->>A: latest snapshot, badge DEVICE
-    else timeout
-      A->>A: keep last value, badge OFFLINE
-    end
-  end
-```
+<p align="center">
+  <img src="assets/diagrams/int-sequence.svg" alt="Integration request sequence" width="100%">
+</p>
 
 ---
 
@@ -117,11 +101,9 @@ To go back to the simulator, tap Putuskan or clear the URL.
 
 Today the link is one direction, device to app, for monitoring. The planned upgrade adds a command endpoint so the control panel can change the device:
 
-```mermaid
-flowchart LR
-  APP["Control panel"] -->|"POST /command<br/>{ targetLux, mode, relay }"| FW["ESP32 command parser"]
-  FW --> ACT["Apply with safety still in charge"]
-```
+<p align="center">
+  <img src="assets/diagrams/int-control.svg" alt="Two way control plan" width="100%">
+</p>
 
 Until then the app control panel is advisory and drives the simulator only. Safety logic on the device always keeps final authority over the relay and dimmer.
 

@@ -78,17 +78,9 @@ ESP32 firmware (`Anggie.ino`) for a closed loop smart light. It keeps a work are
 
 ## 🧠 Control logic
 
-```mermaid
-flowchart TD
-  R["Read sensors"] --> F["EMA filter LDR and current"]
-  F --> D{"Decide state"}
-  D -->|"current over 5 A"| OC["OVERCURRENT_TRIP<br/>relay off"]
-  D -->|"hour 22 to 06"| NM["NIGHT_MODE<br/>dimmer 40 percent"]
-  D -->|"LDR over 3000"| DO["DAYLIGHT_OFF<br/>relay off"]
-  D -->|"otherwise"| PID["SAFE_PID_ACTIVE<br/>chase 500 lux"]
-  PID --> OUT["Drive dimmer 0..80 percent"]
-  NM --> OUT
-```
+<p align="center">
+  <img src="assets/diagrams/fw-control.svg" alt="Firmware control logic" width="100%">
+</p>
 
 The PID adds a dynamic feed forward boost when the LDR reports a dark room, mapping the LDR range 0 to 1000 into an extra error of 100 down to 0. Integral wind up is clamped to plus or minus 100.
 

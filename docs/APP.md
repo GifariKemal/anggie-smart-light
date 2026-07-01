@@ -60,15 +60,9 @@ A full screenshot tour is in [flow/README.md](flow/README.md).
 
 ## 🗃️ Code structure
 
-```mermaid
-flowchart TD
-  M["main.dart"] --> DS["DeviceScope<br/>InheritedNotifier"]
-  DS --> SIM["DeviceSimulator<br/>sim + HTTP polling"]
-  SIM --> MODEL["Telemetry model<br/>fromJson / toJson"]
-  DS --> SC["Screens<br/>splash, onboarding, dashboard, control, settings"]
-  SC --> HUD["HUD widgets<br/>gauge, sparkline, metric tile, grid"]
-  SIM --> SFX["Sfx<br/>sound + haptics"]
-```
+<p align="center">
+  <img src="assets/diagrams/app-structure.svg" alt="App code structure" width="100%">
+</p>
 
 | Path | Responsibility |
 | :-- | :-- |
@@ -86,12 +80,9 @@ flowchart TD
 
 The app has one source object that can run in two modes:
 
-```mermaid
-flowchart LR
-  Q{"device URL set<br/>and reachable?"}
-  Q -->|yes| LIVE["Poll GET /telemetry<br/>badge DEVICE"]
-  Q -->|no| SIMU["Local simulation<br/>badge SIM"]
-```
+<p align="center">
+  <img src="assets/diagrams/app-source.svg" alt="Live device or simulator source" width="100%">
+</p>
 
 Set the device URL in the Settings screen. When the poll succeeds the dashboard shows real values and the simulation pauses. When it fails the app keeps working in simulation. The URL is saved with `shared_preferences`.
 

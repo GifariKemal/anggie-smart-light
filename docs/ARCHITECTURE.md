@@ -32,26 +32,9 @@ A high level view of how Anggie is put together, from the silicon to the screen.
   <img src="assets/dataflow.svg" alt="Data flow from hardware to app" width="100%">
 </p>
 
-```mermaid
-flowchart TB
-  subgraph FW["Firmware (ESP32)"]
-    direction TB
-    sense["Sense: BH1750, LDR, ACS712, RTC"]
-    think["Think: EMA, PID, state machine"]
-    act["Act: relay, AC dimmer"]
-    serve["Serve: telemetry over Serial and HTTP"]
-    sense --> think --> act
-    think --> serve
-  end
-  subgraph APP["App (Flutter)"]
-    direction TB
-    source["Source: poll device or simulate"]
-    model["Model: device.telemetry.v1"]
-    ui["UI: dashboard, control, settings"]
-    source --> model --> ui
-  end
-  serve -->|JSON over WiFi| source
-```
+<p align="center">
+  <img src="assets/diagrams/arch-system.svg" alt="System map firmware and app" width="100%">
+</p>
 
 ---
 
@@ -87,16 +70,9 @@ This is the single most important rule of the project. One contract, two faithfu
 
 ## 🔁 Control loop
 
-```mermaid
-stateDiagram-v2
-  [*] --> SAFE_PID_ACTIVE
-  SAFE_PID_ACTIVE --> OVERCURRENT_TRIP: current over 5 A
-  SAFE_PID_ACTIVE --> NIGHT_MODE: hour in night window
-  SAFE_PID_ACTIVE --> DAYLIGHT_OFF: filtered LDR over 3000
-  NIGHT_MODE --> OVERCURRENT_TRIP: current over 5 A
-  DAYLIGHT_OFF --> SAFE_PID_ACTIVE: ambient drops
-  OVERCURRENT_TRIP --> SAFE_PID_ACTIVE: current safe again
-```
+<p align="center">
+  <img src="assets/diagrams/arch-states.svg" alt="Control loop state machine" width="100%">
+</p>
 
 Safety always wins. Remote commands, when they arrive, will be advisory and the device keeps final authority.
 
@@ -104,14 +80,9 @@ Safety always wins. Remote commands, when they arrive, will be advisory and the 
 
 ## 🧱 App layers
 
-```mermaid
-flowchart TD
-  scope["DeviceScope (InheritedNotifier)"] --> sim["DeviceSimulator (ChangeNotifier)"]
-  sim --> poll["HTTP poller"]
-  sim --> gen["Local simulation"]
-  scope --> screens["Screens"]
-  screens --> widgets["HUD widgets and painters"]
-```
+<p align="center">
+  <img src="assets/diagrams/arch-layers.svg" alt="App layers" width="100%">
+</p>
 
 State flows from one notifier down through an inherited widget, so screens rebuild on each telemetry tick while custom painters stay isolated with repaint boundaries.
 
